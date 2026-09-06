@@ -1,18 +1,29 @@
 import LanguageSwitcher from './LanguageSwitcher'
 
-export default function Header({ isAdmin, onLogoClick, t, lang, onChangeLang }) {
+export default function Header({ isAdmin, onLogoClick, t, lang, onChangeLang, siteName, logoUrl }) {
+  const name = siteName || 'Choco-Flora'
+  const dashIndex = name.indexOf('-')
+
   return (
     <header className="site-header">
       <button
         className="logo-button"
         onClick={onLogoClick}
-        aria-label="Choco-Flora"
+        aria-label={name}
         title=""
       >
-        <img src="/logo.png" alt="Choco-Flora logo" />
+        <img src={logoUrl || '/logo.png'} alt={`${name} logo`} referrerPolicy="no-referrer" />
       </button>
       <h1 className="site-title">
-        Choco<span className="accent">-</span>Flora
+        {dashIndex === -1 ? (
+          name
+        ) : (
+          <>
+            {name.slice(0, dashIndex)}
+            <span className="accent">-</span>
+            {name.slice(dashIndex + 1)}
+          </>
+        )}
       </h1>
       <p className="site-subtitle">{t.subtitle}</p>
 

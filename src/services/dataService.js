@@ -20,12 +20,20 @@ import {
   loadMenu, saveMenu,
   loadThemeId, saveThemeId,
   loadCustomThemes, saveCustomThemes,
+  loadSiteSettings, saveSiteSettings,
 } from '../utils/storage'
 
-// Логин админа больше не хранится и не проверяется здесь: вход в админку
-// идёт напрямую через Firebase Authentication (см. src/firebase.js и
-// src/components/AdminLoginModal.jsx). Кто может войти — управляется в
-// Firebase Console -> Authentication -> Users, а не в этом файле.
+const DEFAULT_ADMIN = { login: 'admin', password: 'admin' }
+
+// Настройки сайта, которые можно менять в режиме админа: название сайта,
+// ссылка на лого и цвета текста (заголовка и общего текста). Пустая строка
+// у цвета означает «использовать цвет текущей темы».
+const DEFAULT_SITE_SETTINGS = {
+  siteName: 'Choco-Flora',
+  logoUrl: '',
+  titleColor: '',
+  textColor: '',
+}
 
 // ---------------------------------------------------------------------
 // РЕЖИМ FIREBASE
@@ -39,6 +47,7 @@ async function firestoreApi() {
   const menuCol = collection(db, 'menu')
   const themesCol = collection(db, 'themes')
   const siteDoc = doc(db, 'settings', 'site')
+  const adminDoc = doc(db, 'settings', 'admin')
 
   async function ensureSeed() {
     const menuSnap = await getDocs(menuCol)
@@ -70,7 +79,11 @@ async function firestoreApi() {
 
     const siteSnap = await getDoc(siteDoc)
     if (!siteSnap.exists()) {
-      await setDoc(siteDoc, { themeId: 'default' })
+      await setDoc(siteDoc, { themeId: 'default', ...DEFAULT_SITE_SETTINGS })
+    }
+    const adminSnap = await getDoc(adminDoc)
+    if (!adminSnap.exists()) {
+      await setDoc(adminDoc, DEFAULT_ADMIN)
     }
   }
 
@@ -101,6 +114,17 @@ async function firestoreApi() {
 
     async setSiteTheme(themeId) {
       await setDoc(siteDoc, { themeId, updatedAt: serverTimestamp() }, { merge: true })
+    },
+
+    subscribeSiteSettings(callback) {
+      return onSnapshot(siteDoc, (snap) => {
+        const data = snap.exists() ? snap.data() : {}
+        callback({ ...DEFAULT_SITE_SETTINGS, ...data })
+      })
+    },
+
+    async setSiteSettings(settings) {
+      await setDoc(siteDoc, { ...settings, updatedAt: serverTimestamp() }, { merge: true })
     },
 
     async addMenuItem(item) {
@@ -138,6 +162,12 @@ async function firestoreApi() {
         await setDoc(siteDoc, { themeId: fallbackId }, { merge: true })
       }
     },
+
+    async verifyAdminLogin(login, password) {
+      const snap = await getDoc(adminDoc)
+      const data = snap.exists() ? snap.data() : DEFAULT_ADMIN
+      return login === data.login && password === data.password
+    },
   }
 }
 
@@ -153,7 +183,7 @@ function seedLocalThemesIfNeeded() {
 }
 
 function localApi() {
-  const listeners = { menu: new Set(), theme: new Set(), themes: new Set() }
+  const listeners = { menu: new Set(), theme: new Set(), themes: new Set(), siteSettings: new Set() }
 
   // синхронизация между вкладками одного браузера
   window.addEventListener('storage', (e) => {
@@ -166,6 +196,9 @@ function localApi() {
     }
     if (e.key === 'choco-flora-custom-themes') {
       listeners.themes.forEach((cb) => cb(loadCustomThemes()))
+    }
+    if (e.key === 'choco-flora-site-settings') {
+      listeners.siteSettings.forEach((cb) => cb(loadSiteSettings(DEFAULT_SITE_SETTINGS)))
     }
   })
 
@@ -198,6 +231,19 @@ function localApi() {
     async setSiteTheme(themeId) {
       saveThemeId(themeId)
       listeners.theme.forEach((cb) => cb(themeId))
+    },
+
+    subscribeSiteSettings(callback) {
+      callback(loadSiteSettings(DEFAULT_SITE_SETTINGS))
+      listeners.siteSettings.add(callback)
+      return () => listeners.siteSettings.delete(callback)
+    },
+
+    async setSiteSettings(settings) {
+      const current = loadSiteSettings(DEFAULT_SITE_SETTINGS)
+      const next = { ...current, ...settings }
+      saveSiteSettings(next)
+      listeners.siteSettings.forEach((cb) => cb(next))
     },
 
     async addMenuItem(item) {
@@ -250,6 +296,10 @@ function localApi() {
         saveThemeId(fallbackId)
         listeners.theme.forEach((cb) => cb(fallbackId))
       }
+    },
+
+    async verifyAdminLogin(login, password) {
+      return login === DEFAULT_ADMIN.login && password === DEFAULT_ADMIN.password
     },
   }
 }

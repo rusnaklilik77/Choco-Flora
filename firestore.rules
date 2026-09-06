@@ -1,22 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Меню, темы и настройки сайта видит любой посетитель (сайт публичный),
-    // но ИЗМЕНЯТЬ их может только тот, кто вошёл через Firebase
-    // Authentication — то есть только пользователь, заранее добавленный
-    // вручную в Firebase Console -> Authentication -> Users. Локального
-    // логина/пароля admin/admin больше нет.
     match /menu/{docId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;
     }
     match /themes/{docId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;
     }
     match /settings/{docId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;
     }
   }
 }

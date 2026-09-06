@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import AdminProductsPanel from './AdminProductsPanel'
 import AdminThemesPanel from './AdminThemesPanel'
+import AdminSiteSettingsPanel from './AdminSiteSettingsPanel'
 
 export default function AdminPanel({
   menu, onAddItem, onUpdateItem, onDeleteItem,
   themes, currentThemeId, onSelectTheme,
   onAddTheme, onUpdateTheme, onDeleteTheme,
+  siteSettings, onSaveSiteSettings,
   onClose, onLogout, dataMode,
 }) {
-  // null = вкладка не открыта, 'products' | 'themes' = какая попап-панель показана
+  // null = вкладка не открыта, 'products' | 'themes' | 'settings' = какая попап-панель показана
   const [activeTab, setActiveTab] = useState(null)
 
   const isShared = dataMode === 'firebase'
@@ -62,6 +64,10 @@ export default function AdminPanel({
             <span className="admin-tab-label">Темы</span>
             <span className="admin-tab-count">{themes.length}</span>
           </button>
+          <button className="admin-tab-btn" onClick={() => setActiveTab('settings')}>
+            <span className="admin-tab-icon">⚙️</span>
+            <span className="admin-tab-label">Настройки сайта</span>
+          </button>
         </div>
 
         <button
@@ -91,6 +97,14 @@ export default function AdminPanel({
           onAddTheme={onAddTheme}
           onUpdateTheme={onUpdateTheme}
           onDeleteTheme={onDeleteTheme}
+          onClose={() => setActiveTab(null)}
+        />
+      )}
+
+      {activeTab === 'settings' && (
+        <AdminSiteSettingsPanel
+          settings={siteSettings}
+          onSave={onSaveSiteSettings}
           onClose={() => setActiveTab(null)}
         />
       )}

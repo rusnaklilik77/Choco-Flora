@@ -1,42 +1,27 @@
 import { useState } from 'react'
-import { isFirebaseConfigured, auth } from '../firebase'
+import { getDataApi } from '../services/dataService'
 
 export default function AdminLoginModal({ onClose, onSuccess }) {
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
 
   const submit = async (e) => {
     e.preventDefault()
-    setError('')
-
-    if (!isFirebaseConfigured) {
-      setError('Firebase не настроен: вход в админку недоступен, пока не заданы ключи Firebase (см. .env).')
-      return
-    }
-
     setChecking(true)
+    setError('')
     try {
-      const { signInWithEmailAndPassword } = await import('firebase/auth')
-      await signInWithEmailAndPassword(auth, email.trim(), password)
-      // Успешный вход возможен только для пользователя, заранее добавленного
-      // в Firebase Console -> Authentication -> Users. Самостоятельная
-      // регистрация в приложении не предусмотрена.
-      onSuccess()
-    } catch (err) {
-      if (
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/invalid-email'
-      ) {
-        setError('Неверный e-mail или пароль')
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Слишком много попыток. Попробуйте позже.')
+      const api = await getDataApi()
+      const ok = await api.verifyAdminLogin(login, password)
+      if (ok) {
+        onSuccess()
       } else {
-        setError('Не удалось выполнить вход. Попробуйте ещё раз.')
+        setError('Неверный логин или пароль')
       }
+    } catch (err) {
+      setError('Не удалось проверить вход. Попробуйте ещё раз.')
     } finally {
       setChecking(false)
     }
@@ -47,20 +32,39 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
       <form className="admin-login-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3>Админ-панель</h3>
         <input
-          type="email"
-          placeholder="E-mail"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          placeholder="Логин"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
           autoFocus
-          autoComplete="username"
         />
-        <input
-          type="password"
-          placeholder="Пароль"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
+        <div className="password-field">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button
+            type="button"
+            className="password-toggle-btn"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+            title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+          >
+            {showPassword ? (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a19.68 19.68 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a19.6 19.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
         {error && <div className="admin-login-error">{error}</div>}
         <button type="submit" className="submit" disabled={checking}>
           {checking ? 'Проверяем…' : 'Войти'}

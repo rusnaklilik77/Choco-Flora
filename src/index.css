@@ -26,6 +26,7 @@ h1, h2, h3, .heading-font {
   --accent2: #ffb6d9;
   --card: #fff5f9;
   --text: #3a1220;
+  --site-title-color: #fff;
 }
 
 .app-root {
@@ -343,7 +344,7 @@ h1, h2, h3, .heading-font {
 .site-title {
   font-size: clamp(28px, 5vw, 40px);
   margin: 14px 0 2px;
-  color: #fff;
+  color: var(--site-title-color);
   letter-spacing: 0.02em;
   text-shadow: 0 2px 12px rgba(0,0,0,0.35);
 }
@@ -757,6 +758,40 @@ h1, h2, h3, .heading-font {
   font-size: 13px;
   margin: -6px 0 10px;
   text-align: center;
+}
+
+/* ---------- Поле пароля с кнопкой-глазом ---------- */
+.password-field {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.password-field input {
+  margin-bottom: 0;
+  padding-right: 42px;
+  width: 100%;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(0,0,0,0.45);
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--accent);
+  background: rgba(0,0,0,0.06);
 }
 
 .admin-panel-overlay {
