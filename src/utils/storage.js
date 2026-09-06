@@ -1,9 +1,7 @@
 const MENU_KEY = 'choco-flora-menu'
 const THEME_KEY = 'choco-flora-theme'
-const ADMIN_KEY = 'choco-flora-admin'
 const CUSTOM_THEMES_KEY = 'choco-flora-custom-themes'
 const LANG_KEY = 'choco-flora-lang'
-const SITE_SETTINGS_KEY = 'choco-flora-site-settings'
 
 export function loadMenu(fallback) {
   try {
@@ -39,23 +37,6 @@ export function loadThemeId(fallback) {
 export function saveThemeId(id) {
   try {
     localStorage.setItem(THEME_KEY, id)
-  } catch {
-    /* ignore */
-  }
-}
-
-export function loadAdminFlag() {
-  try {
-    return localStorage.getItem(ADMIN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function saveAdminFlag(value) {
-  try {
-    if (value) localStorage.setItem(ADMIN_KEY, '1')
-    else localStorage.removeItem(ADMIN_KEY)
   } catch {
     /* ignore */
   }
@@ -99,28 +80,5 @@ export function saveLang(lang) {
     localStorage.setItem(LANG_KEY, lang)
   } catch {
     /* ignore */
-  }
-}
-
-// Общие настройки сайта (название, лого, цвета текста) — общие для всех
-// посетителей в режиме Firebase; в локальном режиме сохраняются в этом
-// браузере, как и остальные данные без Firebase.
-export function loadSiteSettings(fallback) {
-  try {
-    const raw = localStorage.getItem(SITE_SETTINGS_KEY)
-    if (!raw) return fallback
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? { ...fallback, ...parsed } : fallback
-  } catch {
-    return fallback
-  }
-}
-
-export function saveSiteSettings(settings) {
-  try {
-    localStorage.setItem(SITE_SETTINGS_KEY, JSON.stringify(settings))
-  } catch (err) {
-    console.error('[choco-flora] Не удалось сохранить настройки сайта в localStorage:', err)
-    throw err
   }
 }

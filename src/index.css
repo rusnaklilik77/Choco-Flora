@@ -26,11 +26,13 @@ h1, h2, h3, .heading-font {
   --accent2: #ffb6d9;
   --card: #fff5f9;
   --text: #3a1220;
-  --site-title-color: #fff;
 }
 
 .app-root {
   min-height: 100vh;
+  /* 100dvh учитывает появление/скрытие адресной строки в мобильных браузерах,
+     чтобы фон не "прыгал" и не оставлял пустых полос при скролле */
+  min-height: 100dvh;
   width: 100%;
   background: radial-gradient(ellipse at top, var(--bg-to) 0%, var(--bg-from) 65%);
   transition: background 0.9s ease;
@@ -166,31 +168,59 @@ h1, h2, h3, .heading-font {
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
+  /* blur масштабируется от большей стороны экрана, чтобы на телефоне
+     пятно не выглядело слишком резким/мелким, а на большом мониторе —
+     слишком размытым */
+  filter: blur(clamp(36px, 6vmax, 90px));
   opacity: 0.38;
   mix-blend-mode: screen;
+  will-change: transform;
 }
 
+/* Размеры заданы через vmax (максимум из ширины/высоты экрана), а не vw:
+   на мобильном в портретной ориентации доминирует высота, и раньше пятна,
+   посчитанные только от ширины, получались крошечными и не покрывали фон.
+   clamp() дополнительно не даёт им стать переросшими на десктопе/4K. */
 .blob-a {
-  width: 46vw;
-  height: 46vw;
-  top: -12vw;
-  left: -10vw;
+  width: clamp(260px, 52vmax, 620px);
+  height: clamp(260px, 52vmax, 620px);
+  top: -14vmax;
+  left: -12vmax;
   animation: drift-a 22s ease-in-out infinite;
 }
 .blob-b {
-  width: 38vw;
-  height: 38vw;
-  bottom: -10vw;
-  right: -8vw;
+  width: clamp(220px, 44vmax, 520px);
+  height: clamp(220px, 44vmax, 520px);
+  bottom: -12vmax;
+  right: -10vmax;
   animation: drift-b 26s ease-in-out infinite;
 }
 .blob-c {
-  width: 30vw;
-  height: 30vw;
+  width: clamp(180px, 36vmax, 420px);
+  height: clamp(180px, 36vmax, 420px);
   top: 40%;
   left: 50%;
   animation: drift-c 30s ease-in-out infinite;
+}
+
+/* На узких экранах несколько снижаем плотность/анимацию — легче для
+   слабых мобильных GPU и меньше "замыленности" на маленьком дисплее */
+@media (max-width: 520px) {
+  .aurora-blob {
+    opacity: 0.3;
+  }
+  .pattern-overlay {
+    background-size: 64px 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob,
+  .pattern-overlay,
+  .photo-bg-layer,
+  .particle {
+    animation: none !important;
+  }
 }
 
 @keyframes drift-a {
@@ -228,11 +258,23 @@ h1, h2, h3, .heading-font {
 /* ---------- Photo-based theme background (custom themes) ---------- */
 .theme-backdrop-photo .photo-bg-layer {
   position: absolute;
-  inset: -2%;
+  /* небольшой запас за границами вьюпорта, чтобы edge-пиксели не были
+     видны во время pan-анимации на любом соотношении сторон */
+  inset: -3%;
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   filter: saturate(1.05);
   animation: photo-bg-pan 40s ease-in-out infinite alternate;
+}
+
+@media (max-width: 520px) {
+  .theme-backdrop-photo .photo-bg-layer {
+    /* на очень вытянутых мобильных экранах cover может сильно кадрировать
+       кадр по бокам — слегка смещаем фокус к верхней трети, там обычно
+       самое важное на фото (а не даём center давить в середину) */
+    background-position: center top;
+  }
 }
 
 .theme-backdrop-photo .vignette-overlay {
@@ -248,7 +290,9 @@ h1, h2, h3, .heading-font {
 .mascot-figure {
   position: fixed;
   right: clamp(10px, 4vw, 44px);
-  bottom: clamp(10px, 4vh, 50px);
+  /* env(safe-area-inset-bottom) сдвигает маскота выше "чёлки"/жестовой
+     полосы на телефонах с вырезом, чтобы он не перекрывался системным UI */
+  bottom: calc(clamp(10px, 4vh, 50px) + env(safe-area-inset-bottom, 0px));
   z-index: 5;
   display: flex;
   align-items: flex-end;
@@ -344,7 +388,7 @@ h1, h2, h3, .heading-font {
 .site-title {
   font-size: clamp(28px, 5vw, 40px);
   margin: 14px 0 2px;
-  color: var(--site-title-color);
+  color: #fff;
   letter-spacing: 0.02em;
   text-shadow: 0 2px 12px rgba(0,0,0,0.35);
 }
@@ -758,40 +802,6 @@ h1, h2, h3, .heading-font {
   font-size: 13px;
   margin: -6px 0 10px;
   text-align: center;
-}
-
-/* ---------- Поле пароля с кнопкой-глазом ---------- */
-.password-field {
-  position: relative;
-  margin-bottom: 12px;
-}
-
-.password-field input {
-  margin-bottom: 0;
-  padding-right: 42px;
-  width: 100%;
-}
-
-.password-toggle-btn {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: rgba(0,0,0,0.45);
-  border-radius: 8px;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.password-toggle-btn:hover {
-  color: var(--accent);
-  background: rgba(0,0,0,0.06);
 }
 
 .admin-panel-overlay {
