@@ -393,10 +393,6 @@ h1, h2, h3, .heading-font {
   text-shadow: 0 2px 12px rgba(0,0,0,0.35);
 }
 
-.site-title .accent {
-  color: var(--accent);
-}
-
 .site-subtitle {
   margin: 0;
   font-size: 14px;
@@ -785,6 +781,37 @@ h1, h2, h3, .heading-font {
   font-size: 14px;
 }
 
+.password-field {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.password-field input {
+  margin-bottom: 0;
+  padding-right: 42px;
+}
+
+.toggle-password-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.55;
+  padding: 0;
+}
+
+.toggle-password-btn:hover {
+  opacity: 0.9;
+}
+
 .admin-login-card button.submit {
   width: 100%;
   padding: 12px;
@@ -832,8 +859,8 @@ h1, h2, h3, .heading-font {
 /* ---------- Вкладки в хабе админ-панели ---------- */
 .admin-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
   margin: 8px 0 4px;
 }
 
@@ -842,7 +869,7 @@ h1, h2, h3, .heading-font {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 22px 12px;
+  padding: 18px 8px;
   border-radius: 16px;
   border: 2px solid rgba(0,0,0,0.1);
   background: rgba(0,0,0,0.03);
@@ -857,12 +884,13 @@ h1, h2, h3, .heading-font {
 }
 
 .admin-tab-icon {
-  font-size: 30px;
+  font-size: 26px;
 }
 
 .admin-tab-label {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
+  text-align: center;
 }
 
 .admin-tab-count {
@@ -996,6 +1024,14 @@ h1, h2, h3, .heading-font {
 
 .admin-form-actions .save { background: var(--accent); color: #fff; }
 .admin-form-actions .cancel { background: rgba(0,0,0,0.08); color: var(--text); }
+
+.settings-saved-hint {
+  color: #2f9e5c;
+  font-size: 13px;
+  margin: 10px 0 0;
+  text-align: center;
+  font-weight: 600;
+}
 
 /* ---------- Управление темами (создание/редактирование) ---------- */
 .theme-manage-section {

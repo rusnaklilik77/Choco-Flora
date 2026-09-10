@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import AdminProductsPanel from './AdminProductsPanel'
 import AdminThemesPanel from './AdminThemesPanel'
+import AdminSettingsPanel from './AdminSettingsPanel'
 
 export default function AdminPanel({
   menu, onAddItem, onUpdateItem, onDeleteItem,
   themes, currentThemeId, onSelectTheme,
   onAddTheme, onUpdateTheme, onDeleteTheme,
+  settings, onUpdateSettings,
   onClose, onLogout, dataMode,
 }) {
   // null = вкладка не открыта, 'products' | 'themes' = какая попап-панель показана
@@ -62,6 +64,10 @@ export default function AdminPanel({
             <span className="admin-tab-label">Темы</span>
             <span className="admin-tab-count">{themes.length}</span>
           </button>
+          <button className="admin-tab-btn" onClick={() => setActiveTab('settings')}>
+            <span className="admin-tab-icon">⚙️</span>
+            <span className="admin-tab-label">Настройки</span>
+          </button>
         </div>
 
         <button
@@ -91,6 +97,14 @@ export default function AdminPanel({
           onAddTheme={onAddTheme}
           onUpdateTheme={onUpdateTheme}
           onDeleteTheme={onDeleteTheme}
+          onClose={() => setActiveTab(null)}
+        />
+      )}
+
+      {activeTab === 'settings' && (
+        <AdminSettingsPanel
+          settings={settings}
+          onSave={onUpdateSettings}
           onClose={() => setActiveTab(null)}
         />
       )}

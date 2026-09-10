@@ -1,18 +1,18 @@
 import LanguageSwitcher from './LanguageSwitcher'
 
-export default function Header({ isAdmin, onLogoClick, t, lang, onChangeLang }) {
+export default function Header({ isAdmin, onLogoClick, t, lang, onChangeLang, siteTitle, titleColor, logoUrl }) {
   return (
     <header className="site-header">
       <button
         className="logo-button"
         onClick={onLogoClick}
-        aria-label="Choco-Flora"
+        aria-label={siteTitle}
         title=""
       >
-        <img src="/logo.png" alt="Choco-Flora logo" />
+        <img src={logoUrl || '/logo.png'} alt={`${siteTitle} logo`} />
       </button>
-      <h1 className="site-title">
-        Choco<span className="accent">-</span>Flora
+      <h1 className="site-title" style={{ color: titleColor }}>
+        {siteTitle}
       </h1>
       <p className="site-subtitle">{t.subtitle}</p>
 

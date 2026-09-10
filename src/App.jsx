@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { THEMES, getThemeFromList } from './themes'
 import { DEFAULT_MENU } from './data/menuData'
-import { loadLang, saveLang } from './utils/storage'
+import { loadLang, saveLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
 import { getDataApi } from './services/dataService'
 import { getTranslations, DEFAULT_LANG } from './i18n'
 import { auth, isFirebaseConfigured } from './firebase'
@@ -22,6 +22,7 @@ export default function App() {
   const [themeId, setThemeId] = useState('default')
   const [themes, setThemes] = useState(THEMES)
   const [menu, setMenu] = useState(DEFAULT_MENU)
+  const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
   const [selectedItem, setSelectedItem] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
@@ -42,6 +43,7 @@ export default function App() {
     let unsubMenu = () => {}
     let unsubTheme = () => {}
     let unsubThemes = () => {}
+    let unsubSettings = () => {}
 
     getDataApi().then((dataApi) => {
       // getDataApi() уже дожидается dataApi.init() внутри себя (включая
@@ -51,6 +53,7 @@ export default function App() {
       unsubMenu = dataApi.subscribeMenu((items) => setMenu(items))
       unsubTheme = dataApi.subscribeSiteTheme((id) => setThemeId(id))
       unsubThemes = dataApi.subscribeThemes((list) => setThemes(list))
+      unsubSettings = dataApi.subscribeSiteSettings((settings) => setSiteSettings(settings))
       setDataReady(true)
     }).catch((err) => {
       // Подстраховка на случай непредвиденной ошибки: не оставляем сайт
@@ -63,8 +66,14 @@ export default function App() {
       unsubMenu()
       unsubTheme()
       unsubThemes()
+      unsubSettings()
     }
   }, [])
+
+  // Название сайта отражается и в заголовке вкладки браузера.
+  useEffect(() => {
+    document.title = `${siteSettings.siteTitle} — меню`
+  }, [siteSettings.siteTitle])
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 1900)
@@ -128,7 +137,7 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <LoadingScreen hidden={!loading} />
+      <LoadingScreen hidden={!loading} siteTitle={siteSettings.siteTitle} logoUrl={siteSettings.logoUrl} />
 
       <ThemeBackdrop theme={theme} />
       <ParticleBackground
@@ -138,14 +147,23 @@ export default function App() {
       />
       <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
 
-      <Header isAdmin={isAdmin} onLogoClick={handleLogoClick} t={t} lang={lang} onChangeLang={handleChangeLang} />
+      <Header
+        isAdmin={isAdmin}
+        onLogoClick={handleLogoClick}
+        t={t}
+        lang={lang}
+        onChangeLang={handleChangeLang}
+        siteTitle={siteSettings.siteTitle}
+        titleColor={siteSettings.titleColor}
+        logoUrl={siteSettings.logoUrl}
+      />
 
       <main className="menu-section">
         <h2>{t.menuHeading}</h2>
         <MenuGrid items={menu} onSelect={setSelectedItem} emptyText={t.emptyMenu} />
       </main>
 
-      <p className="footer-note">Choco-Flora · +375 60 524 439</p>
+      <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
 
       <ProductModal item={selectedItem} onClose={() => setSelectedItem(null)} t={t} />
 
@@ -169,6 +187,8 @@ export default function App() {
           onAddTheme={(theme) => api.addTheme(theme)}
           onUpdateTheme={(id, theme) => api.updateTheme(id, theme)}
           onDeleteTheme={(id) => api.deleteTheme(id)}
+          settings={siteSettings}
+          onUpdateSettings={(settings) => api.updateSiteSettings(settings)}
           onClose={() => setShowAdminPanel(false)}
           onLogout={handleAdminLogout}
         />

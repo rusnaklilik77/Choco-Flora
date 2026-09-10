@@ -20,6 +20,8 @@ import {
   loadMenu, saveMenu,
   loadThemeId, saveThemeId,
   loadCustomThemes, saveCustomThemes,
+  loadSiteSettings, saveSiteSettings,
+  DEFAULT_SITE_SETTINGS, SITE_SETTINGS_KEY,
 } from '../utils/storage'
 
 // Логин админа больше не хранится и не проверяется здесь: вход в админку
@@ -70,7 +72,19 @@ async function firestoreApi() {
 
     const siteSnap = await getDoc(siteDoc)
     if (!siteSnap.exists()) {
-      await setDoc(siteDoc, { themeId: 'default' })
+      await setDoc(siteDoc, { themeId: 'default', ...DEFAULT_SITE_SETTINGS })
+    } else {
+      // На случай, если документ settings/site уже существовал до
+      // появления настроек сайта (название, цвет, лого, телефон) —
+      // дозаполняем только отсутствующие поля, не трогая остальное.
+      const data = siteSnap.data()
+      const missing = {}
+      for (const key of Object.keys(DEFAULT_SITE_SETTINGS)) {
+        if (data[key] === undefined) missing[key] = DEFAULT_SITE_SETTINGS[key]
+      }
+      if (Object.keys(missing).length) {
+        await setDoc(siteDoc, missing, { merge: true })
+      }
     }
   }
 
@@ -99,8 +113,24 @@ async function firestoreApi() {
       })
     },
 
+    subscribeSiteSettings(callback) {
+      return onSnapshot(siteDoc, (snap) => {
+        const data = snap.exists() ? snap.data() : {}
+        callback({
+          siteTitle: data.siteTitle || DEFAULT_SITE_SETTINGS.siteTitle,
+          titleColor: data.titleColor || DEFAULT_SITE_SETTINGS.titleColor,
+          logoUrl: data.logoUrl || DEFAULT_SITE_SETTINGS.logoUrl,
+          phone: data.phone || DEFAULT_SITE_SETTINGS.phone,
+        })
+      })
+    },
+
     async setSiteTheme(themeId) {
       await setDoc(siteDoc, { themeId, updatedAt: serverTimestamp() }, { merge: true })
+    },
+
+    async updateSiteSettings(settings) {
+      await setDoc(siteDoc, { ...settings, updatedAt: serverTimestamp() }, { merge: true })
     },
 
     async addMenuItem(item) {
@@ -153,7 +183,7 @@ function seedLocalThemesIfNeeded() {
 }
 
 function localApi() {
-  const listeners = { menu: new Set(), theme: new Set(), themes: new Set() }
+  const listeners = { menu: new Set(), theme: new Set(), themes: new Set(), settings: new Set() }
 
   // синхронизация между вкладками одного браузера
   window.addEventListener('storage', (e) => {
@@ -166,6 +196,9 @@ function localApi() {
     }
     if (e.key === 'choco-flora-custom-themes') {
       listeners.themes.forEach((cb) => cb(loadCustomThemes()))
+    }
+    if (e.key === SITE_SETTINGS_KEY) {
+      listeners.settings.forEach((cb) => cb(loadSiteSettings(DEFAULT_SITE_SETTINGS)))
     }
   })
 
@@ -195,9 +228,22 @@ function localApi() {
       return () => listeners.themes.delete(callback)
     },
 
+    subscribeSiteSettings(callback) {
+      callback(loadSiteSettings(DEFAULT_SITE_SETTINGS))
+      listeners.settings.add(callback)
+      return () => listeners.settings.delete(callback)
+    },
+
     async setSiteTheme(themeId) {
       saveThemeId(themeId)
       listeners.theme.forEach((cb) => cb(themeId))
+    },
+
+    async updateSiteSettings(settings) {
+      const current = loadSiteSettings(DEFAULT_SITE_SETTINGS)
+      const next = { ...current, ...settings }
+      saveSiteSettings(next)
+      listeners.settings.forEach((cb) => cb(next))
     },
 
     async addMenuItem(item) {
