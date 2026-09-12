@@ -1,8 +1,6 @@
 import { useState } from 'react'
 
-const PHONE_NUMBER = '+37360524439'
-
-export default function ProductModal({ item, onClose, t }) {
+export default function ProductModal({ item, onClose, t, phone }) {
   const [photoIndex, setPhotoIndex] = useState(0)
   if (!item) return null
 
@@ -50,8 +48,8 @@ export default function ProductModal({ item, onClose, t }) {
           <div className="modal-composition-label">{t.compositionLabel}</div>
           <p className="modal-composition">{item.composition}</p>
 
-          <a className="call-button" href={`tel:${PHONE_NUMBER}`}>
-            {t.callButtonPrefix} {PHONE_NUMBER}
+          <a className="call-button" href={`tel:${phone}`}>
+            {t.callButtonPrefix} {phone}
           </a>
         </div>
       </div>

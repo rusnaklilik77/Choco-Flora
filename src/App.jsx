@@ -165,7 +165,7 @@ export default function App() {
 
       <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
 
-      <ProductModal item={selectedItem} onClose={() => setSelectedItem(null)} t={t} />
+      <ProductModal item={selectedItem} onClose={() => setSelectedItem(null)} t={t} phone={siteSettings.phone} />
 
       {showAdminLogin && (
         <AdminLoginModal
