@@ -62,3 +62,53 @@ export function toDirectImageUrl(url) {
 export function toDirectImageUrls(urls) {
   return (urls || []).map(toDirectImageUrl).filter(Boolean)
 }
+
+// ---------------------------------------------------------------------
+// ВИДЕО (видео-фон темы и видео/GIF-фигурка-талисман)
+// ---------------------------------------------------------------------
+// Для видео thumbnail-ссылка не годится (она отдаёт картинку-превью),
+// поэтому ссылку с Google Диска превращаем в ссылку прямого скачивания
+// вида https://drive.google.com/uc?export=download&id=ФАЙЛ_ID —
+// её браузер умеет проигрывать в теге <video>.
+//
+// ВАЖНО: файл на Диске тоже должен быть открыт «для всех, у кого есть
+// ссылка». Для больших роликов Google может показывать страницу
+// подтверждения — поэтому для фона лучше короткий лёгкий файл (до ~15 МБ)
+// или свой хостинг/CDN.
+
+/** Похожа ли ссылка на видеофайл (.mp4 / .webm / .ogv / .mov). */
+export function isVideoUrl(url) {
+  if (!url) return false
+  return /\.(mp4|webm|ogv|ogg|mov|m4v)(\?|#|$)/i.test(url.trim())
+}
+
+/** Похожа ли ссылка на GIF-анимацию. */
+export function isGifUrl(url) {
+  if (!url) return false
+  return /\.gif(\?|#|$)/i.test(url.trim())
+}
+
+/** Готовит ссылку к использованию как источник видео (<video src="...">). */
+export function toDirectVideoUrl(url) {
+  if (!url) return ''
+  const trimmed = url.trim()
+  if (!trimmed) return ''
+  if (!isGoogleDriveLink(trimmed)) return trimmed
+
+  // Уже готовая прямая ссылка на скачивание — не трогаем.
+  if (/\/uc\?/.test(trimmed)) return trimmed
+
+  const id = extractDriveFileId(trimmed)
+  if (!id) return trimmed
+
+  return `https://drive.google.com/uc?export=download&id=${id}`
+}
+
+/**
+ * Универсальная подготовка ссылки на «живую» картинку: если это видео —
+ * отдаём ссылку для <video>, если GIF или обычная картинка — для <img>.
+ */
+export function toDirectMediaUrl(url, kind) {
+  if (kind === 'video') return toDirectVideoUrl(url)
+  return toDirectImageUrl(url)
+}

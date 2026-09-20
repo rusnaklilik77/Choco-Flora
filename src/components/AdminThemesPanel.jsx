@@ -2,9 +2,26 @@ import { useState } from 'react'
 import ThemeSwatchGrid from './ThemeSwatchGrid'
 import { emptyCustomTheme, THEME_CATEGORIES } from '../themes'
 import { deriveThemeColors } from '../utils/colorTools'
-import { toDirectImageUrl, toDirectImageUrls, isGoogleDriveLink } from '../utils/driveTools'
+import {
+  toDirectImageUrl, toDirectImageUrls, toDirectVideoUrl,
+  isGoogleDriveLink, isGifUrl,
+} from '../utils/driveTools'
 
 const MAX_STICKERS = 5
+
+// Тип фигурки-талисмана: эмодзи, картинка по ссылке или видео/GIF-анимация.
+const MASCOT_TYPES = [
+  { id: 'emoji', label: 'Эмодзи' },
+  { id: 'image', label: 'Картинка (ссылка)' },
+  { id: 'video', label: 'Видео / GIF-анимация (ссылка)' },
+]
+
+function detectMascotType(mascot) {
+  if (!mascot) return 'emoji'
+  if (mascot.video) return 'video'
+  if (mascot.image) return 'image'
+  return 'emoji'
+}
 
 export default function AdminThemesPanel({
   themes, currentThemeId, onSelectTheme,
@@ -14,24 +31,30 @@ export default function AdminThemesPanel({
   const [themeSaving, setThemeSaving] = useState(false)
   const [themeError, setThemeError] = useState('')
 
+  const buildForm = (theme) => {
+    const mascot = theme.mascotItems?.[0] || {}
+    return {
+      ...theme,
+      particleImages: [...(theme.particleImages || [])],
+      bgVideo: theme.bgVideo || '',
+      mascotType: detectMascotType(mascot),
+      mascotEmoji: mascot.emoji || '',
+      mascotImage: mascot.image || '',
+      mascotVideo: mascot.video || '',
+      mascotSize: mascot.size ?? 1,
+      mascotStyle: mascot.style || 'bounce',
+      particleSize: theme.particleSize ?? 1,
+    }
+  }
+
   const startCreateTheme = () => {
     setThemeError('')
-    const base = emptyCustomTheme()
-    setThemeForm({
-      ...base,
-      mascotEmoji: base.mascotItems?.[0]?.emoji || '',
-      mascotImage: '',
-    })
+    setThemeForm(buildForm(emptyCustomTheme()))
   }
 
   const startEditTheme = (theme) => {
     setThemeError('')
-    setThemeForm({
-      ...theme,
-      particleImages: [...(theme.particleImages || [])],
-      mascotEmoji: theme.mascotItems?.[0]?.image ? '' : (theme.mascotItems?.[0]?.emoji || ''),
-      mascotImage: theme.mascotItems?.[0]?.image || '',
-    })
+    setThemeForm(buildForm(theme))
   }
 
   const cancelThemeForm = () => {
@@ -39,13 +62,7 @@ export default function AdminThemesPanel({
     setThemeError('')
   }
 
-  const setBgImageUrl = (value) => {
-    setThemeForm((f) => ({ ...f, bgImage: value }))
-  }
-
-  const removeBgImage = () => {
-    setThemeForm((f) => ({ ...f, bgImage: null }))
-  }
+  const patch = (changes) => setThemeForm((f) => ({ ...f, ...changes }))
 
   const setStickerUrl = (index, value) => {
     setThemeForm((f) => {
@@ -64,10 +81,7 @@ export default function AdminThemesPanel({
   }
 
   const addStickerSlot = () => {
-    setThemeForm((f) => ({
-      ...f,
-      particleImages: [...(f.particleImages || []), ''],
-    }))
+    setThemeForm((f) => ({ ...f, particleImages: [...(f.particleImages || []), ''] }))
   }
 
   const handleAccentChange = (e) => {
@@ -75,20 +89,26 @@ export default function AdminThemesPanel({
     setThemeForm((f) => ({ ...f, colors: { ...f.colors, ...deriveThemeColors(accent) } }))
   }
 
-  const handleCategoryChange = (e) => {
-    setThemeForm((f) => ({ ...f, category: e.target.value }))
-  }
+  const buildMascotItems = (form) => {
+    const size = Number(form.mascotSize) > 0 ? Number(form.mascotSize) : 1
+    const style = form.mascotStyle === 'swing' ? 'swing' : 'bounce'
 
-  const handleMascotEmojiChange = (e) => {
-    const emoji = e.target.value
-    setThemeForm((f) => ({ ...f, mascotEmoji: emoji, emoji: emoji || f.emoji }))
+    if (form.mascotType === 'video') {
+      const video = (form.mascotVideo || '').trim()
+      if (!video) return []
+      // GIF показываем как картинку, видео — через тег <video>; в обоих
+      // случаях ссылку с Google Диска переводим в прямую.
+      return [{ video: toDirectVideoUrl(video), size, style }]
+    }
+    if (form.mascotType === 'image') {
+      const image = (form.mascotImage || '').trim()
+      if (!image) return []
+      return [{ image: toDirectImageUrl(image), size, style }]
+    }
+    const emoji = (form.mascotEmoji || '').trim()
+    if (!emoji) return []
+    return [{ emoji, size, style }]
   }
-
-  const handleMascotImageChange = (value) => {
-    setThemeForm((f) => ({ ...f, mascotImage: value }))
-  }
-
-  const removeMascotImage = () => handleMascotImageChange('')
 
   const saveThemeForm = async () => {
     if (!themeForm.name.trim()) {
@@ -99,23 +119,24 @@ export default function AdminThemesPanel({
     setThemeSaving(true)
     setThemeError('')
     try {
-      const mascotImage = themeForm.mascotImage?.trim()
-      const mascotEmoji = themeForm.mascotEmoji?.trim()
-      // Если задано и то, и другое — картинка по ссылке важнее эмодзи.
-      const mascotItems = mascotImage
-        ? [{ image: toDirectImageUrl(mascotImage), size: 1 }]
-        : mascotEmoji
-          ? [{ emoji: mascotEmoji, size: 1 }]
-          : []
+      const mascotItems = buildMascotItems(themeForm)
+      const {
+        mascotType: _t, mascotEmoji: _e, mascotImage: _i, mascotVideo: _v,
+        mascotSize: _s, mascotStyle: _st,
+        ...restForm
+      } = themeForm
 
-      const { mascotEmoji: _dropEmoji, mascotImage: _dropImage, ...restForm } = themeForm
       const themeToSave = {
         ...restForm,
         name: themeForm.name.trim(),
+        emoji: (themeForm.mascotEmoji || themeForm.emoji || '🎨').trim() || '🎨',
         bgImage: themeForm.bgImage ? toDirectImageUrl(themeForm.bgImage) : null,
+        bgVideo: themeForm.bgVideo ? toDirectVideoUrl(themeForm.bgVideo) : null,
         particleImages: toDirectImageUrls(themeForm.particleImages || []),
+        particleSize: Number(themeForm.particleSize) > 0 ? Number(themeForm.particleSize) : 1,
         mascotItems,
       }
+
       if (themeForm.id) {
         await onUpdateTheme(themeForm.id, themeToSave)
       } else {
@@ -179,7 +200,10 @@ export default function AdminThemesPanel({
                   )}
                   <div className="admin-item-info">
                     <strong>{t.emoji} {t.name}</strong>
-                    <span>{(t.particleImages || []).length} картинок · {t.category}</span>
+                    <span>
+                      {(t.particleImages || []).length} картинок · {t.category}
+                      {t.bgVideo ? ' · 🎬 видео-фон' : ''}
+                    </span>
                   </div>
                   <div className="admin-item-actions">
                     <button onClick={() => startEditTheme(t)} title="Редактировать">✏️</button>
@@ -201,12 +225,16 @@ export default function AdminThemesPanel({
               <label>Название темы</label>
               <input
                 value={themeForm.name}
-                onChange={(e) => setThemeForm({ ...themeForm, name: e.target.value })}
+                onChange={(e) => patch({ name: e.target.value })}
                 placeholder="Например: Мой день рождения"
               />
 
               <label>Категория (в каком разделе показывать тему)</label>
-              <select value={themeForm.category || 'custom'} onChange={handleCategoryChange} className="admin-select">
+              <select
+                value={themeForm.category || 'custom'}
+                onChange={(e) => patch({ category: e.target.value })}
+                className="admin-select"
+              >
                 {THEME_CATEGORIES.map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
@@ -216,15 +244,44 @@ export default function AdminThemesPanel({
               {themeForm.bgImage ? (
                 <div className="theme-bg-preview">
                   <img src={toDirectImageUrl(themeForm.bgImage)} alt="Фон темы" referrerPolicy="no-referrer" />
-                  <button type="button" className="remove-x" onClick={removeBgImage}>✕</button>
+                  <button type="button" className="remove-x" onClick={() => patch({ bgImage: null })}>✕</button>
                 </div>
               ) : null}
               <input
                 value={themeForm.bgImage || ''}
-                onChange={(e) => setBgImageUrl(e.target.value)}
+                onChange={(e) => patch({ bgImage: e.target.value })}
                 placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
               />
               {themeForm.bgImage && isGoogleDriveLink(themeForm.bgImage) && (
+                <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+              )}
+
+              <label style={{ marginTop: 14 }}>
+                Видео-фон темы вместо фото (ссылка на .mp4/.webm — свой хостинг, CDN или Google Диск)
+              </label>
+              <p className="theme-picker-hint" style={{ marginTop: 0 }}>
+                Если заполнено — фон будет проигрываться как зацикленное видео (без звука)
+                вместо фото или узора выше. Видео должно быть лёгким (короткий ролик),
+                чтобы быстро загружаться у посетителей.
+              </p>
+              {themeForm.bgVideo ? (
+                <div className="theme-bg-preview">
+                  <video
+                    src={toDirectVideoUrl(themeForm.bgVideo)}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                  <button type="button" className="remove-x" onClick={() => patch({ bgVideo: '' })}>✕</button>
+                </div>
+              ) : null}
+              <input
+                value={themeForm.bgVideo || ''}
+                onChange={(e) => patch({ bgVideo: e.target.value })}
+                placeholder="https://.../background.mp4 или ссылка с Google Диска"
+              />
+              {themeForm.bgVideo && isGoogleDriveLink(themeForm.bgVideo) && (
                 <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
               )}
 
@@ -254,13 +311,22 @@ export default function AdminThemesPanel({
                 )}
               </div>
 
+              <label style={{ marginTop: 14 }}>Размер падающих картинок/эмодзи</label>
+              <div className="range-row">
+                <input
+                  type="range"
+                  min="0.4"
+                  max="2.5"
+                  step="0.1"
+                  value={themeForm.particleSize ?? 1}
+                  onChange={(e) => patch({ particleSize: Number(e.target.value) })}
+                />
+                <span className="range-value">×{Number(themeForm.particleSize ?? 1).toFixed(1)}</span>
+              </div>
+
               <label>Цвет темы</label>
               <div className="color-picker-row">
-                <input
-                  type="color"
-                  value={themeForm.colors.accent}
-                  onChange={handleAccentChange}
-                />
+                <input type="color" value={themeForm.colors.accent} onChange={handleAccentChange} />
                 <span className="color-picker-hint">
                   Остальные оттенки (фон, карточки, текст) подберутся автоматически
                 </span>
@@ -270,35 +336,89 @@ export default function AdminThemesPanel({
                 Фигурка-талисман (стоит в правом нижнем углу экрана и покачивается)
               </label>
               <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-                Можно задать эмодзи ИЛИ ссылку на картинку (например, PNG с прозрачным фоном
-                с Google Диска) — если заполнить оба поля, используется картинка по ссылке.
+                Выберите тип: эмодзи, картинка по ссылке, или видео/GIF-анимация по ссылке
+                (например, с Google Диска) — так можно добавить любую свою анимацию
+                (в том числе покадровую или футажную, с любым персонажем — материал должен
+                принадлежать вам или быть свободным для использования).
               </p>
-              <div className="color-picker-row">
-                <input
-                  className="mascot-emoji-input"
-                  value={themeForm.mascotEmoji || ''}
-                  onChange={handleMascotEmojiChange}
-                  maxLength={4}
-                  placeholder="🎨"
-                  style={{ width: 64, fontSize: 24, textAlign: 'center' }}
-                />
-                <span className="color-picker-hint">Вариант 1: эмодзи</span>
-              </div>
+              <select
+                className="admin-select"
+                value={themeForm.mascotType || 'emoji'}
+                onChange={(e) => patch({ mascotType: e.target.value })}
+              >
+                {MASCOT_TYPES.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
 
-              {themeForm.mascotImage ? (
-                <div className="theme-bg-preview">
-                  <img src={toDirectImageUrl(themeForm.mascotImage)} alt="Фигурка-талисман" referrerPolicy="no-referrer" />
-                  <button type="button" className="remove-x" onClick={removeMascotImage}>✕</button>
+              {themeForm.mascotType === 'emoji' && (
+                <div className="color-picker-row" style={{ marginTop: 10 }}>
+                  <input
+                    className="mascot-emoji-input"
+                    value={themeForm.mascotEmoji || ''}
+                    onChange={(e) => patch({ mascotEmoji: e.target.value })}
+                    maxLength={4}
+                    placeholder="🎨"
+                    style={{ width: 64, fontSize: 24, textAlign: 'center' }}
+                  />
+                  <span className="color-picker-hint">Любой эмодзи — он же будет значком темы</span>
                 </div>
-              ) : null}
-              <input
-                value={themeForm.mascotImage || ''}
-                onChange={(e) => handleMascotImageChange(e.target.value)}
-                placeholder="Вариант 2: ссылка на картинку — https://drive.google.com/file/d/.../view?usp=sharing"
-              />
-              {themeForm.mascotImage && isGoogleDriveLink(themeForm.mascotImage) && (
-                <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
               )}
+
+              {themeForm.mascotType === 'image' && (
+                <>
+                  {themeForm.mascotImage ? (
+                    <div className="theme-bg-preview mascot-preview">
+                      <img src={toDirectImageUrl(themeForm.mascotImage)} alt="Фигурка-талисман" referrerPolicy="no-referrer" />
+                      <button type="button" className="remove-x" onClick={() => patch({ mascotImage: '' })}>✕</button>
+                    </div>
+                  ) : null}
+                  <input
+                    value={themeForm.mascotImage || ''}
+                    onChange={(e) => patch({ mascotImage: e.target.value })}
+                    placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
+                  />
+                  {themeForm.mascotImage && isGoogleDriveLink(themeForm.mascotImage) && (
+                    <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                  )}
+                </>
+              )}
+
+              {themeForm.mascotType === 'video' && (
+                <>
+                  {themeForm.mascotVideo ? (
+                    <div className="theme-bg-preview mascot-preview">
+                      {isGifUrl(themeForm.mascotVideo) ? (
+                        <img src={toDirectVideoUrl(themeForm.mascotVideo)} alt="Анимация талисмана" referrerPolicy="no-referrer" />
+                      ) : (
+                        <video src={toDirectVideoUrl(themeForm.mascotVideo)} autoPlay loop muted playsInline />
+                      )}
+                      <button type="button" className="remove-x" onClick={() => patch({ mascotVideo: '' })}>✕</button>
+                    </div>
+                  ) : null}
+                  <input
+                    value={themeForm.mascotVideo || ''}
+                    onChange={(e) => patch({ mascotVideo: e.target.value })}
+                    placeholder="https://.../mascot.mp4, .webm или .gif (можно с Google Диска)"
+                  />
+                  {themeForm.mascotVideo && isGoogleDriveLink(themeForm.mascotVideo) && (
+                    <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                  )}
+                </>
+              )}
+
+              <label style={{ marginTop: 14 }}>Размер фигурки-талисмана</label>
+              <div className="range-row">
+                <input
+                  type="range"
+                  min="0.4"
+                  max="3"
+                  step="0.1"
+                  value={themeForm.mascotSize ?? 1}
+                  onChange={(e) => patch({ mascotSize: Number(e.target.value) })}
+                />
+                <span className="range-value">×{Number(themeForm.mascotSize ?? 1).toFixed(1)}</span>
+              </div>
 
               {themeError && <div className="admin-login-error">{themeError}</div>}
 

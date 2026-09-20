@@ -5,10 +5,17 @@ const LANG_KEY = 'choco-flora-lang'
 export const SITE_SETTINGS_KEY = 'choco-flora-site-settings'
 
 // Настройки сайта, которые можно менять в режиме админа: название сайта,
-// цвет текста названия, ссылка на логотип и телефон для связи в подвале.
+// цвет текста названия (или цвет каждой буквы отдельно), шрифт сайта,
+// ссылка на логотип и телефон для связи в подвале.
 export const DEFAULT_SITE_SETTINGS = {
   siteTitle: 'Choco-Flora',
   titleColor: '#ffffff',
+  // Если задано (массив HEX-цветов длиной с titleTitle) — каждая буква
+  // названия сайта красится в свой цвет. Если null/пусто — используется
+  // один общий titleColor.
+  titleLetterColors: null,
+  // id шрифта из src/fonts.js — какой шрифт использовать на всём сайте.
+  fontFamily: 'fredoka',
   logoUrl: '/logo.png',
   phone: '+375 60 524 439',
 }

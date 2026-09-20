@@ -64,6 +64,7 @@ async function firestoreApi() {
           return setDoc(doc(db, 'themes', id), {
             ...rest,
             bgImage: rest.bgImage || null,
+            bgVideo: rest.bgVideo || null,
             particleImages: rest.particleImages || [],
           })
         })
@@ -119,6 +120,10 @@ async function firestoreApi() {
         callback({
           siteTitle: data.siteTitle || DEFAULT_SITE_SETTINGS.siteTitle,
           titleColor: data.titleColor || DEFAULT_SITE_SETTINGS.titleColor,
+          titleLetterColors: Array.isArray(data.titleLetterColors) && data.titleLetterColors.length
+            ? data.titleLetterColors
+            : DEFAULT_SITE_SETTINGS.titleLetterColors,
+          fontFamily: data.fontFamily || DEFAULT_SITE_SETTINGS.fontFamily,
           logoUrl: data.logoUrl || DEFAULT_SITE_SETTINGS.logoUrl,
           phone: data.phone || DEFAULT_SITE_SETTINGS.phone,
         })

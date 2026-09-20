@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { toDirectImageUrls } from '../utils/driveTools'
+import { toDirectImageUrl, toDirectImageUrls, isGoogleDriveLink } from '../utils/driveTools'
 
-const emptyForm = { name: '', price: '', composition: '', photosText: '' }
+const MAX_PHOTOS = 5
+const emptyForm = { name: '', price: '', composition: '', photos: [''] }
 
 function itemToForm(item) {
+  const photos = (item.photos && item.photos.length ? item.photos : [''])
   return {
     name: item.name,
     price: item.price,
     composition: item.composition,
-    photosText: (item.photos || []).join(', '),
+    photos: photos.slice(0, MAX_PHOTOS),
   }
 }
 
@@ -17,9 +19,7 @@ function formToItem(form) {
     name: form.name.trim() || 'Без названия',
     price: form.price.trim() || '—',
     composition: form.composition.trim(),
-    photos: toDirectImageUrls(
-      form.photosText.split(',').map((s) => s.trim()).filter(Boolean)
-    ),
+    photos: toDirectImageUrls(form.photos.map((s) => (s || '').trim()).filter(Boolean)),
   }
 }
 
@@ -50,6 +50,27 @@ export default function AdminProductsPanel({
     setCreating(false)
     setForm(emptyForm)
     setError('')
+  }
+
+  const setPhotoUrl = (index, value) => {
+    setForm((f) => {
+      const next = [...f.photos]
+      next[index] = value
+      return { ...f, photos: next }
+    })
+  }
+
+  const removePhoto = (index) => {
+    setForm((f) => {
+      const next = [...f.photos]
+      next.splice(index, 1)
+      if (!next.length) next.push('')
+      return { ...f, photos: next }
+    })
+  }
+
+  const addPhotoSlot = () => {
+    setForm((f) => ({ ...f, photos: [...f.photos, ''] }))
   }
 
   const saveForm = async () => {
@@ -114,13 +135,45 @@ export default function AdminProductsPanel({
               onChange={(e) => setForm({ ...form, composition: e.target.value })}
               placeholder="Состав / описание блюда"
             />
-            <label>Фото (ссылки через запятую — можно с Google Диска)</label>
-            <textarea
-              rows={2}
-              value={form.photosText}
-              onChange={(e) => setForm({ ...form, photosText: e.target.value })}
-              placeholder="https://drive.google.com/file/d/..., https://..."
-            />
+
+            <label style={{ marginTop: 14 }}>
+              Фото товара (до {MAX_PHOTOS} шт., ссылка — можно с Google Диска)
+            </label>
+            <div className="link-list">
+              {form.photos.map((url, i) => (
+                <div className="link-item" key={i}>
+                  {url ? (
+                    <img className="link-item-preview" src={toDirectImageUrl(url)} alt="" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="link-item-preview link-item-preview-empty">🖼️</div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <input
+                      value={url}
+                      onChange={(e) => setPhotoUrl(i, e.target.value)}
+                      placeholder="https://drive.google.com/file/d/..."
+                    />
+                    {url && isGoogleDriveLink(url) && (
+                      <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="remove-x-inline"
+                    onClick={() => removePhoto(i)}
+                    title="Стереть ссылку"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {form.photos.length < MAX_PHOTOS && (
+                <button type="button" className="admin-add-btn admin-add-btn-small" onClick={addPhotoSlot}>
+                  ＋ Добавить фото
+                </button>
+              )}
+            </div>
+
             {error && <div className="admin-login-error">{error}</div>}
 
             <div className="admin-form-actions">

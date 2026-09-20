@@ -5,6 +5,7 @@ import { loadLang, saveLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
 import { getDataApi } from './services/dataService'
 import { getTranslations, DEFAULT_LANG } from './i18n'
 import { auth, isFirebaseConfigured } from './firebase'
+import { getFontStack } from './fonts'
 
 import LoadingScreen from './components/LoadingScreen'
 import ThemeBackdrop from './components/ThemeBackdrop'
@@ -108,6 +109,12 @@ export default function App() {
     r.style.setProperty('--text', theme.colors.text)
   }, [theme])
 
+  // Шрифт сайта выбирается в настройках админом и применяется через
+  // CSS-переменную --site-font, которую использует body и заголовки.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--site-font', getFontStack(siteSettings.fontFamily))
+  }, [siteSettings.fontFamily])
+
   const handleSelectTheme = (id) => {
     api?.setSiteTheme(id)
   }
@@ -144,6 +151,7 @@ export default function App() {
         particles={theme.particles}
         particleImages={theme.particleImages}
         themeId={theme.id}
+        sizeScale={theme.particleSize ?? 1}
       />
       <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
 
@@ -155,6 +163,7 @@ export default function App() {
         onChangeLang={handleChangeLang}
         siteTitle={siteSettings.siteTitle}
         titleColor={siteSettings.titleColor}
+        titleLetterColors={siteSettings.titleLetterColors}
         logoUrl={siteSettings.logoUrl}
       />
 

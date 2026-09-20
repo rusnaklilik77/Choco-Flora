@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 
-export default function ParticleBackground({ particles, particleImages, themeId }) {
+export default function ParticleBackground({ particles, particleImages, themeId, sizeScale = 1 }) {
   const useImages = Boolean(particleImages && particleImages.length)
   const source = useImages ? particleImages : particles
+  const scale = Number(sizeScale) > 0 ? Number(sizeScale) : 1
 
   const items = useMemo(() => {
     if (!source || !source.length) return []
@@ -12,11 +13,12 @@ export default function ParticleBackground({ particles, particleImages, themeId 
       const left = Math.random() * 100
       const duration = 9 + Math.random() * 10
       const delay = -(Math.random() * duration)
-      const size = 14 + Math.random() * 18
+      const size = (14 + Math.random() * 18) * scale
       const drift = (Math.random() - 0.5) * 60
       return { id: `${themeId}-${i}`, value, left, duration, delay, size, drift }
     })
-  }, [source, themeId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, themeId, scale])
 
   if (!items.length) return null
 
