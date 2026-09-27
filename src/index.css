@@ -683,7 +683,7 @@ h1, h2, h3, .heading-font {
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 10px 26px rgba(0,0,0,0.28);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.4s ease;
   display: flex;
   flex-direction: column;
 }
@@ -747,6 +747,7 @@ h1, h2, h3, .heading-font {
   border-radius: 20px;
   position: relative;
   animation: popIn 0.22s ease;
+  transition: background 0.4s ease, color 0.4s ease;
 }
 
 @keyframes popIn {
@@ -1814,6 +1815,26 @@ body.admin-dark-mode .admin-qr-wrap {
 
 body.admin-dark-mode .admin-qr-wrap img {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* ---------- Тёмная тема сайта: витрина (карточки меню, окно товара) ---------- */
+/* Тот же переключатель ☀️/🌙, что и выше для панели администратора — но
+   эти правила красят то, что видят ПОСЕТИТЕЛИ сайта: сетку карточек
+   товара (MenuGrid.jsx) и открытую карточку товара (ProductModal.jsx).
+   Раньше их фон брался только из var(--card) конкретной темы оформления
+   (Хэллоуин/Зима/...) и оставался светлым независимо от тёмного режима. */
+body.admin-dark-mode .menu-card,
+body.admin-dark-mode .modal-card {
+  background: #201b24;
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .menu-card-body h3 {
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .empty-menu {
+  color: #f2ecf4;
 }
 
 /* ---------- Поделиться сайтом / QR-код в панели администратора ---------- */

@@ -57,7 +57,7 @@ function loadYouTubeIframeApi() {
 //    возможным — без необходимости тапать ещё раз.
 // 3) Пока звук выключен, в углу экрана видна кнопка 🔇 — прямая подсказка
 //    посетителю, что можно тапнуть и включить звук самому.
-export default function MusicPlayer({ songUrl, emoji, label }) {
+export default function MusicPlayer({ songUrl }) {
   const audioRef = useRef(null)
   const containerRef = useRef(null)
   const playerRef = useRef(null)
@@ -74,17 +74,38 @@ export default function MusicPlayer({ songUrl, emoji, label }) {
 
   kindRef.current = kind
 
-  // Создаём (или пересоздаём при смене ролика) настоящий YT.Player через
-  // официальный API. Он сам подставляет iframe внутрь containerRef.
+  // Создаём (или пересоздаём при смене ролика/темы) настоящий YT.Player
+  // через официальный API.
+  //
+  // ВАЖНО (это и была причина белого экрана при смене темы, требовавшего
+  // перезагрузки страницы): YouTube IFrame API не заполняет переданный
+  // элемент — он его ЦЕЛИКОМ ЗАМЕНЯЕТ на свой <iframe> прямо в DOM, в
+  // обход React. Если отдать ему containerRef.current (узел, которым
+  // управляет React), React продолжает думать, что этот <div> всё ещё
+  // на месте — а физически там уже <iframe> от YouTube. При следующей
+  // смене темы React пытается обновить/удалить свой (уже не существующий)
+  // узел и падает с ошибкой вроде "Failed to execute 'removeChild' on
+  // 'Node'" — без ErrorBoundary это роняет всё приложение в белый экран,
+  // и помогает только F5.
+  //
+  // Исправление: React управляет только ВНЕШНИМ div (containerRef).
+  // Внутрь него мы вручную (в обход React) вставляем ещё один, пустой
+  // div и отдаём YouTube именно его — что бы YouTube с ним ни делал,
+  // React об этом даже не узнает, потому что никогда не рендерил
+  // содержимое containerRef через JSX.
   useEffect(() => {
     if (kind !== 'youtube' || !videoId || !containerRef.current) return
     let cancelled = false
     isPlayerReadyRef.current = false
     setLoadError(false)
 
+    const mountNode = document.createElement('div')
+    containerRef.current.innerHTML = ''
+    containerRef.current.appendChild(mountNode)
+
     loadYouTubeIframeApi().then((YT) => {
-      if (cancelled || !containerRef.current) return
-      playerRef.current = new YT.Player(containerRef.current, {
+      if (cancelled) return
+      playerRef.current = new YT.Player(mountNode, {
         videoId,
         playerVars: {
           autoplay: 1,
@@ -136,6 +157,10 @@ export default function MusicPlayer({ songUrl, emoji, label }) {
       }
       playerRef.current = null
       isPlayerReadyRef.current = false
+      // Чистим ВНЕШНИЙ div (им управляет React, ему можно). destroy() выше
+      // уже убрал сам iframe — это просто подчищает mountNode на случай,
+      // если промис выше ещё не успел создать плеер к моменту cleanup.
+      if (containerRef.current) containerRef.current.innerHTML = ''
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, kind])
@@ -238,22 +263,6 @@ export default function MusicPlayer({ songUrl, emoji, label }) {
     }
   }
 
-  const toggle = () => {
-    if (!unlocked) {
-      unlockSound()
-      return
-    }
-    if (playing) {
-      if (kind === 'audio') audioRef.current?.pause()
-      if (kind === 'youtube') playerRef.current?.pauseVideo()
-      setPlaying(false)
-    } else {
-      if (kind === 'audio') audioRef.current?.play().catch(() => {})
-      if (kind === 'youtube') playerRef.current?.playVideo()
-      setPlaying(true)
-    }
-  }
-
   if (!kind) return null
 
   return (
@@ -271,31 +280,9 @@ export default function MusicPlayer({ songUrl, emoji, label }) {
         />
       )}
       {kind === 'youtube' && videoId && (
-        // Официальный YT.Player сам вставит сюда свой iframe — руками
-        // src мы больше не собираем.
+        // Официальный YT.Player сам вставит внутрь свой iframe (см. эффект
+        // выше) — руками ни src, ни дочерние элементы мы больше не задаём.
         <div ref={containerRef} className="yt-audio-frame" />
-      )}
-
-      <button
-        type="button"
-        className={`music-fab ${unlocked && playing ? 'is-playing' : ''} ${!unlocked ? 'is-muted' : ''} ${loadError ? 'has-error' : ''}`}
-        onClick={toggle}
-        aria-label={loadError ? 'Ошибка загрузки музыки' : !unlocked ? 'Включить звук музыки' : playing ? 'Поставить музыку на паузу' : 'Включить музыку'}
-        title={loadError ? 'Ссылка на музыку недоступна — проверьте её в админке (Темы → Песня)' : (!unlocked ? 'Нажмите, чтобы включить звук' : (label ? `Музыка темы «${label}»` : 'Музыка темы'))}
-      >
-        <span className="music-fab-disc">{loadError ? '⚠️' : !unlocked ? '🔇' : (emoji || '🎵')}</span>
-      </button>
-
-      {!unlocked && !loadError && (
-        <div className="music-hint" role="status">
-          🔊 Нажмите в любом месте экрана, чтобы включить музыку
-        </div>
-      )}
-
-      {loadError && (
-        <div className="music-hint music-hint-error" role="status">
-          ⚠️ Не удалось загрузить файл музыки — проверьте ссылку в админке
-        </div>
       )}
     </>
   )

@@ -43,6 +43,11 @@ export function darken(hex, amount) {
 /**
  * По одному выбранному акцентному цвету собирает полную палитру темы —
  * так же, как это сделано вручную во встроенных темах.
+ *
+ * card раньше был осветлён на 94% (почти до чистого белого) — из-за этого
+ * фон карточек товара выглядел одинаково белым независимо от темы. Теперь
+ * осветление слабее (80%), так что карточки остаются светлыми и текст на
+ * них читается, но при этом заметно окрашены в цвет темы.
  */
 export function deriveThemeColors(accentHex) {
   const accent = accentHex || '#ff2e87'
@@ -51,7 +56,7 @@ export function deriveThemeColors(accentHex) {
     accent2: lighten(accent, 0.55),
     bgFrom: darken(accent, 0.55),
     bgTo: darken(accent, 0.75),
-    card: lighten(accent, 0.94),
+    card: lighten(accent, 0.8),
     text: darken(accent, 0.62),
   }
 }

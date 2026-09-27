@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import AdminProductsPanel from './AdminProductsPanel'
 import AdminThemesPanel from './AdminThemesPanel'
 import AdminSettingsPanel from './AdminSettingsPanel'
 import { sanitizeSiteUrl } from '../utils/storage'
-
-const DARK_MODE_KEY = 'choco_admin_dark_mode'
 
 export default function AdminPanel({
   menu, onAddItem, onUpdateItem, onDeleteItem,
@@ -12,20 +10,12 @@ export default function AdminPanel({
   onAddTheme, onUpdateTheme, onDeleteTheme,
   settings, onUpdateSettings,
   onClose, onLogout, dataMode,
+  darkMode, onToggleDarkMode,
 }) {
   // null = вкладка не открыта, 'products' | 'themes' = какая попап-панель показана
   const [activeTab, setActiveTab] = useState(null)
   const [showQr, setShowQr] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  // Тёмная/светлая тема ПАНЕЛИ АДМИНИСТРАТОРА (☀️ день / 🌙 ночь) — личная
-  // настройка удобства работы в админке, не влияет на то, как сайт видят
-  // посетители. Запоминается в этом браузере.
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem(DARK_MODE_KEY) === '1')
-
-  useEffect(() => {
-    document.body.classList.toggle('admin-dark-mode', darkMode)
-    localStorage.setItem(DARK_MODE_KEY, darkMode ? '1' : '0')
-  }, [darkMode])
 
   const isShared = dataMode === 'firebase'
   const isFallback = dataMode === 'local-fallback'
@@ -63,22 +53,22 @@ export default function AdminPanel({
         <div className="admin-panel-header">
           <h2>Панель администратора</h2>
           <div className="admin-panel-header-actions">
-            <div className="admin-mode-toggle" role="group" aria-label="Тема панели администратора">
+            <div className="admin-mode-toggle" role="group" aria-label="Тема сайта (светлая/тёмная)">
               <button
                 type="button"
                 className={!darkMode ? 'active' : ''}
-                onClick={() => setDarkMode(false)}
-                title="Светлая тема панели (день)"
-                aria-label="Светлая тема панели"
+                onClick={() => onToggleDarkMode(false)}
+                title="Светлая тема сайта (день)"
+                aria-label="Светлая тема сайта"
               >
                 ☀️
               </button>
               <button
                 type="button"
                 className={darkMode ? 'active' : ''}
-                onClick={() => setDarkMode(true)}
-                title="Тёмная тема панели (ночь)"
-                aria-label="Тёмная тема панели"
+                onClick={() => onToggleDarkMode(true)}
+                title="Тёмная тема сайта (ночь) — затемняет и панель админа, и карточки товара на витрине"
+                aria-label="Тёмная тема сайта"
               >
                 🌙
               </button>

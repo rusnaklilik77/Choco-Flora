@@ -25,6 +25,17 @@ import AdminPanel from './components/AdminPanel'
 // (свайп влево/вправо), а не только тапом по кнопке.
 const SWIPE_THRESHOLD = 60
 
+// Тёмная/светлая тема ВСЕГО САЙТА (☀️/🌙 в шапке панели администратора).
+// Раньше это состояние жило внутри AdminPanel.jsx и переключало класс
+// на <body> только пока сама панель админа была открыта — из-за этого
+// тёмный режим красил только элементы админки и не влиял на то, что
+// видят посетители (карточки товара оставались светлыми). Теперь
+// состояние поднято на уровень App: класс применяется независимо от
+// того, открыта ли сейчас панель, поэтому включённая один раз тёмная
+// тема остаётся активной и для витрины (карточек меню, окна товара)
+// и для самой админки — в этом браузере, пока её не выключат обратно.
+const DARK_MODE_KEY = 'choco_admin_dark_mode'
+
 export default function App() {
   const [loading, setLoading] = useState(true)
   const [dataReady, setDataReady] = useState(false)
@@ -38,6 +49,7 @@ export default function App() {
   const [api, setApi] = useState(null)
   const [lang, setLang] = useState(() => loadLang(DEFAULT_LANG))
   const [activeCategory, setActiveCategory] = useState('all')
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem(DARK_MODE_KEY) === '1')
   const touchStartX = useRef(null)
 
   const theme = getThemeFromList(themes, themeId)
@@ -185,6 +197,13 @@ export default function App() {
     r.style.setProperty('--text', theme.colors.text)
   }, [theme])
 
+  // Применяем тёмную тему сайта ко всему приложению (не только пока
+  // открыта панель админа) и запоминаем выбор в этом браузере.
+  useEffect(() => {
+    document.body.classList.toggle('admin-dark-mode', darkMode)
+    localStorage.setItem(DARK_MODE_KEY, darkMode ? '1' : '0')
+  }, [darkMode])
+
   // Шрифт сайта выбирается в настройках админом и применяется через
   // CSS-переменную --site-font, которую использует body и заголовки.
   useEffect(() => {
@@ -235,7 +254,7 @@ export default function App() {
       />
       <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
 
-      <MusicPlayer songUrl={theme.songUrl} emoji={theme.emoji} label={theme.name} />
+      <MusicPlayer songUrl={theme.songUrl} />
 
       <Header
         isAdmin={isAdmin}
@@ -284,6 +303,8 @@ export default function App() {
           onUpdateSettings={(settings) => api.updateSiteSettings(settings)}
           onClose={() => setShowAdminPanel(false)}
           onLogout={handleAdminLogout}
+          darkMode={darkMode}
+          onToggleDarkMode={setDarkMode}
         />
       )}
     </div>
