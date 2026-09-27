@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toDirectImageUrl, isGoogleDriveLink } from '../utils/driveTools'
+import { sanitizeSiteUrl } from '../utils/storage'
 import { SITE_FONTS } from '../fonts'
 
 const DEFAULT_LETTER_COLOR = '#ffffff'
@@ -76,6 +77,7 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
         fontFamily: form.fontFamily || 'fredoka',
         logoUrl: form.logoUrl ? toDirectImageUrl(form.logoUrl) : '/logo.png',
         phone: (form.phone || '').trim(),
+        siteUrl: sanitizeSiteUrl(form.siteUrl),
       })
       setSaved(true)
     } catch (err) {
@@ -103,8 +105,10 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
         </p>
 
         <div className="admin-form">
-          <label>Название сайта</label>
+          <label htmlFor="site-title">Название сайта</label>
           <input
+            id="site-title"
+            name="site-title"
             value={form.siteTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="Choco-Flora"
@@ -121,6 +125,8 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
                 <span>{char === ' ' ? '␣' : char}</span>
                 <input
                   type="color"
+                  id={`letter-color-${i}`}
+                  name={`letter-color-${i}`}
                   className={letters[i] ? 'is-set' : 'is-empty'}
                   value={letters[i] || DEFAULT_LETTER_COLOR}
                   onChange={(e) => setLetterColor(i, e.target.value)}
@@ -140,8 +146,10 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             ))}
           </div>
 
-          <label style={{ marginTop: 14 }}>Шрифт сайта</label>
+          <label htmlFor="site-font" style={{ marginTop: 14 }}>Шрифт сайта</label>
           <select
+            id="site-font"
+            name="site-font"
             className="admin-select"
             value={form.fontFamily || 'fredoka'}
             onChange={(e) => update({ fontFamily: e.target.value })}
@@ -157,7 +165,7 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             {form.siteTitle || 'Choco-Flora'} — пример шрифта
           </p>
 
-          <label style={{ marginTop: 14 }}>
+          <label htmlFor="site-logo" style={{ marginTop: 14 }}>
             Логотип (ссылка на картинку, например с Google Диска)
           </label>
           <div className="theme-bg-preview">
@@ -171,6 +179,8 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             )}
           </div>
           <input
+            id="site-logo"
+            name="site-logo"
             value={form.logoUrl === '/logo.png' ? '' : (form.logoUrl || '')}
             onChange={(e) => update({ logoUrl: e.target.value })}
             placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
@@ -181,11 +191,29 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             <span className="link-hint">Поле пустое — используется логотип по умолчанию.</span>
           )}
 
-          <label style={{ marginTop: 14 }}>Номер телефона</label>
+          <label htmlFor="site-phone" style={{ marginTop: 14 }}>Номер телефона</label>
           <input
+            id="site-phone"
+            name="site-phone"
+            type="tel"
+            autoComplete="tel"
             value={form.phone || ''}
             onChange={(e) => update({ phone: e.target.value })}
             placeholder="+373 69 716 541"
+          />
+
+          <label htmlFor="site-url" style={{ marginTop: 14 }}>Ссылка на сайт</label>
+          <p className="theme-picker-hint" style={{ marginTop: 0 }}>
+            Используется в кнопке «Поделиться сайтом», в QR-коде и в ссылках на
+            отдельные карточки товара.
+          </p>
+          <input
+            id="site-url"
+            name="site-url"
+            type="url"
+            value={form.siteUrl || ''}
+            onChange={(e) => update({ siteUrl: e.target.value })}
+            placeholder="https://choco-flora.vercel.app/"
           />
 
           {error && <div className="admin-login-error">{error}</div>}

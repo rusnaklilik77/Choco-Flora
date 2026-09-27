@@ -11,6 +11,7 @@ export const DEFAULT_MENU = [
       'https://picsum.photos/seed/lava1/600/450',
       'https://picsum.photos/seed/lava1b/600/450',
     ],
+    category: 'choco',
   },
   {
     id: 'item-2',
@@ -20,6 +21,7 @@ export const DEFAULT_MENU = [
     photos: [
       'https://picsum.photos/seed/lava2/600/450',
     ],
+    category: 'choco',
   },
   {
     id: 'item-3',
@@ -29,6 +31,7 @@ export const DEFAULT_MENU = [
     photos: [
       'https://picsum.photos/seed/lava3/600/450',
     ],
+    category: 'choco',
   },
   {
     id: 'item-4',
@@ -38,6 +41,7 @@ export const DEFAULT_MENU = [
     photos: [
       'https://picsum.photos/seed/lava4/600/450',
     ],
+    category: 'fruits',
   },
   {
     id: 'item-5',
@@ -47,6 +51,7 @@ export const DEFAULT_MENU = [
     photos: [
       'https://picsum.photos/seed/lava5/600/450',
     ],
+    category: 'choco',
   },
   {
     id: 'item-6',
@@ -56,5 +61,6 @@ export const DEFAULT_MENU = [
     photos: [
       'https://picsum.photos/seed/lava6/600/450',
     ],
+    category: 'choco',
   },
 ]

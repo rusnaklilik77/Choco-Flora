@@ -49,6 +49,8 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
         <h3>Админ-панель</h3>
         <input
           type="email"
+          id="admin-login-email"
+          name="email"
           placeholder="E-mail"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -58,6 +60,8 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
         <div className="password-field">
           <input
             type={showPassword ? 'text' : 'password'}
+            id="admin-login-password"
+            name="password"
             placeholder="Пароль"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

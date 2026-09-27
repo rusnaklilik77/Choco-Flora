@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { toDirectImageUrl, toDirectImageUrls, isGoogleDriveLink } from '../utils/driveTools'
+import { CATEGORIES, PRODUCT_CATEGORIES, DEFAULT_PRODUCT_CATEGORY, getCategory } from '../data/categories'
 
 const MAX_PHOTOS = 5
-const emptyForm = { name: '', price: '', composition: '', photos: [''] }
+const emptyForm = { name: '', price: '', composition: '', photos: [''], category: DEFAULT_PRODUCT_CATEGORY }
 
 function itemToForm(item) {
   const photos = (item.photos && item.photos.length ? item.photos : [''])
@@ -11,6 +12,7 @@ function itemToForm(item) {
     price: item.price,
     composition: item.composition,
     photos: photos.slice(0, MAX_PHOTOS),
+    category: item.category || DEFAULT_PRODUCT_CATEGORY,
   }
 }
 
@@ -20,6 +22,7 @@ function formToItem(form) {
     price: form.price.trim() || '—',
     composition: form.composition.trim(),
     photos: toDirectImageUrls(form.photos.map((s) => (s || '').trim()).filter(Boolean)),
+    category: form.category || DEFAULT_PRODUCT_CATEGORY,
   }
 }
 
@@ -31,6 +34,7 @@ export default function AdminProductsPanel({
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [filterCat, setFilterCat] = useState('all')
 
   const startEdit = (item) => {
     setEditingId(item.id)
@@ -116,25 +120,44 @@ export default function AdminProductsPanel({
 
         {showForm && (
           <div className="admin-form">
-            <label>Название</label>
+            <label htmlFor="product-name">Название</label>
             <input
+              id="product-name"
+              name="product-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Например: Chocolate Lava Cake"
             />
-            <label>Цена</label>
+            <label htmlFor="product-price">Цена</label>
             <input
+              id="product-price"
+              name="product-price"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
               placeholder="Например: 15 BYN"
             />
-            <label>Из чего состоит</label>
+            <label htmlFor="product-composition">Из чего состоит</label>
             <textarea
+              id="product-composition"
+              name="product-composition"
               rows={3}
               value={form.composition}
               onChange={(e) => setForm({ ...form, composition: e.target.value })}
               placeholder="Состав / описание блюда"
             />
+
+            <label htmlFor="product-category" style={{ marginTop: 14 }}>Категория (в каком разделе главного экрана показывать)</label>
+            <select
+              id="product-category"
+              name="product-category"
+              className="admin-select"
+              value={form.category || DEFAULT_PRODUCT_CATEGORY}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            >
+              {PRODUCT_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.emoji} {c.labelRu}</option>
+              ))}
+            </select>
 
             <label style={{ marginTop: 14 }}>
               Фото товара (до {MAX_PHOTOS} шт., ссылка — можно с Google Диска)
@@ -149,6 +172,8 @@ export default function AdminProductsPanel({
                   )}
                   <div style={{ flex: 1 }}>
                     <input
+                      id={`product-photo-${i}`}
+                      name={`product-photo-${i}`}
                       value={url}
                       onChange={(e) => setPhotoUrl(i, e.target.value)}
                       placeholder="https://drive.google.com/file/d/..."
@@ -191,8 +216,25 @@ export default function AdminProductsPanel({
           </button>
         )}
 
+        {!showForm && menu.length > 0 && (
+          <div className="admin-category-tabs">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`admin-category-tab ${filterCat === c.id ? 'active' : ''}`}
+                onClick={() => setFilterCat(c.id)}
+              >
+                {c.emoji} {c.labelRu}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ marginTop: 16 }}>
-          {menu.map((item) => (
+          {menu
+            .filter((item) => filterCat === 'all' || (item.category || DEFAULT_PRODUCT_CATEGORY) === filterCat)
+            .map((item) => (
             <div className="admin-item-row" key={item.id}>
               <img
                 src={item.photos?.[0] || 'https://picsum.photos/seed/choco/100/100'}
@@ -201,7 +243,7 @@ export default function AdminProductsPanel({
               />
               <div className="admin-item-info">
                 <strong>{item.name}</strong>
-                <span>{item.price}</span>
+                <span>{item.price} · {getCategory(item.category || DEFAULT_PRODUCT_CATEGORY).emoji} {getCategory(item.category || DEFAULT_PRODUCT_CATEGORY).labelRu}</span>
               </div>
               <div className="admin-item-actions">
                 <button onClick={() => startEdit(item)} title="Редактировать">✏️</button>

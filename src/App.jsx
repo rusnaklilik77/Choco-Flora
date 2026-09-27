@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { THEMES, getThemeFromList } from './themes'
 import { DEFAULT_MENU } from './data/menuData'
+import { CATEGORIES, DEFAULT_PRODUCT_CATEGORY } from './data/categories'
 import { loadLang, saveLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
 import { getDataApi } from './services/dataService'
 import { getTranslations, DEFAULT_LANG } from './i18n'
@@ -12,10 +13,17 @@ import ThemeBackdrop from './components/ThemeBackdrop'
 import ParticleBackground from './components/ParticleBackground'
 import MascotFigure from './components/MascotFigure'
 import Header from './components/Header'
+import CategoryNav from './components/CategoryNav'
 import MenuGrid from './components/MenuGrid'
+import MusicPlayer from './components/MusicPlayer'
 import ProductModal from './components/ProductModal'
 import AdminLoginModal from './components/AdminLoginModal'
 import AdminPanel from './components/AdminPanel'
+
+// Минимальная длина свайпа (в пикселях), чтобы посчитать его переключением
+// категории — так навигация между разделами меню работает и жестом
+// (свайп влево/вправо), а не только тапом по кнопке.
+const SWIPE_THRESHOLD = 60
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -24,19 +32,92 @@ export default function App() {
   const [themes, setThemes] = useState(THEMES)
   const [menu, setMenu] = useState(DEFAULT_MENU)
   const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
-  const [selectedItem, setSelectedItem] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [api, setApi] = useState(null)
   const [lang, setLang] = useState(() => loadLang(DEFAULT_LANG))
+  const [activeCategory, setActiveCategory] = useState('all')
+  const touchStartX = useRef(null)
 
   const theme = getThemeFromList(themes, themeId)
   const t = getTranslations(lang)
 
+  const visibleMenu = activeCategory === 'all'
+    ? menu
+    : menu.filter((item) => (item.category || DEFAULT_PRODUCT_CATEGORY) === activeCategory)
+
+  // Индивидуальная ссылка на товар (?item=ID, см. ProductModal.jsx) —
+  // открывает нужную карточку сразу при заходе по ссылке, а закрытие
+  // карточки работает через историю браузера: кнопка «назад» (и системный
+  // жест «назад» на телефоне) закрывает карточку, а не сразу уходит с сайта.
+  const [selectedItemId, setSelectedItemId] = useState(null)
+  const selectedItem = menu.find((m) => m.id === selectedItemId) || null
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const initialItem = params.get('item')
+    if (initialItem) {
+      // Сначала «чистое» состояние (главная), потом — открытая карточка.
+      // Так «назад» всегда попадает на главную, даже если посетитель
+      // пришёл сразу по ссылке на карточку (не было других переходов).
+      window.history.replaceState({ item: null }, '', window.location.pathname)
+      window.history.pushState({ item: initialItem }, '', `?item=${encodeURIComponent(initialItem)}`)
+      setSelectedItemId(initialItem)
+    }
+
+    const onPopState = (e) => {
+      setSelectedItemId(e.state?.item || null)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  const openItem = (item) => {
+    window.history.pushState({ item: item.id }, '', `?item=${encodeURIComponent(item.id)}`)
+    setSelectedItemId(item.id)
+  }
+
+  const closeItem = () => {
+    if (window.history.state?.item) {
+      window.history.back()
+    } else {
+      setSelectedItemId(null)
+    }
+  }
+
   const handleChangeLang = (code) => {
     setLang(code)
     saveLang(code)
+  }
+
+  // Экран загрузки закрывается сам, без отдельной кнопки — музыку темы
+  // при этом запускает MusicPlayer.jsx: пробует включить сразу, а если
+  // браузер это заблокирует (обычная ситуация без действия посетителя),
+  // запускает её по самому первому касанию/клику где угодно на странице.
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1900)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Свайп влево/вправо по области меню — переключает вкладку категории, как
+  // это привычно на телефоне (жест вместо тапа по кнопке).
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches?.[0]?.clientX ?? null
+  }
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current == null) return
+    const endX = e.changedTouches?.[0]?.clientX ?? touchStartX.current
+    const delta = endX - touchStartX.current
+    touchStartX.current = null
+    if (Math.abs(delta) < SWIPE_THRESHOLD) return
+    const idx = CATEGORIES.findIndex((c) => c.id === activeCategory)
+    if (idx === -1) return
+    // Свайп влево (палец двигается к левому краю) -> следующая категория.
+    const nextIdx = delta < 0
+      ? Math.min(idx + 1, CATEGORIES.length - 1)
+      : Math.max(idx - 1, 0)
+    setActiveCategory(CATEGORIES[nextIdx].id)
   }
 
   // Инициализация источника данных (Firebase или локальный режим)
@@ -76,12 +157,7 @@ export default function App() {
     document.title = `${siteSettings.siteTitle} — меню`
   }, [siteSettings.siteTitle])
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1900)
-    return () => clearTimeout(t)
-  }, [])
-
-  // Статус админа теперь определяется исключительно сессией Firebase
+  // Статус админа определяется исключительно сессией Firebase
   // Authentication: считается вошедшим только тот, кто реально
   // авторизовался через Firebase (и, соответственно, заранее добавлен как
   // пользователь в Firebase Console -> Authentication -> Users).
@@ -144,7 +220,11 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <LoadingScreen hidden={!loading} siteTitle={siteSettings.siteTitle} logoUrl={siteSettings.logoUrl} />
+      <LoadingScreen
+        hidden={!loading}
+        siteTitle={siteSettings.siteTitle}
+        logoUrl={siteSettings.logoUrl}
+      />
 
       <ThemeBackdrop theme={theme} />
       <ParticleBackground
@@ -154,6 +234,8 @@ export default function App() {
         sizeScale={theme.particleSize ?? 1}
       />
       <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
+
+      <MusicPlayer songUrl={theme.songUrl} emoji={theme.emoji} label={theme.name} />
 
       <Header
         isAdmin={isAdmin}
@@ -167,14 +249,16 @@ export default function App() {
         logoUrl={siteSettings.logoUrl}
       />
 
-      <main className="menu-section">
-        <h2>{t.menuHeading}</h2>
-        <MenuGrid items={menu} onSelect={setSelectedItem} emptyText={t.emptyMenu} />
+      <CategoryNav active={activeCategory} onChange={setActiveCategory} t={t} />
+
+      <main className="menu-section" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        <h2>{t.categories?.[activeCategory] || t.menuHeading}</h2>
+        <MenuGrid items={visibleMenu} onSelect={openItem} emptyText={t.emptyMenu} />
       </main>
 
       <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
 
-      <ProductModal item={selectedItem} onClose={() => setSelectedItem(null)} t={t} phone={siteSettings.phone} />
+      <ProductModal item={selectedItem} onClose={closeItem} t={t} phone={siteSettings.phone} siteUrl={siteSettings.siteUrl} />
 
       {showAdminLogin && (
         <AdminLoginModal

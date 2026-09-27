@@ -2,6 +2,13 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  /* Не даём странице случайно скроллиться по горизонтали — на телефонах
+     это может конфликтовать с системным жестом «назад» по краю экрана
+     (полоска-индикатор у iPhone / жесты у Android). */
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -12,6 +19,7 @@ html, body, #root {
 body {
   font-family: var(--site-font, 'Nunito', system-ui, sans-serif);
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
   color: var(--text);
 }
 
@@ -27,6 +35,10 @@ h1, h2, h3, .heading-font {
   --card: #fff5f9;
   --text: #3a1220;
   --site-font: 'Fredoka', 'Nunito', system-ui, sans-serif;
+  /* Отступы под "вырезы"/жестовые зоны телефона: полоска-индикатор
+     home у iPhone, панель жестов/кнопки навигации у Android. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .app-root {
@@ -393,7 +405,7 @@ h1, h2, h3, .heading-font {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 16px 10px;
+  padding: calc(28px + var(--safe-top)) 16px 10px;
   text-align: center;
 }
 
@@ -488,6 +500,76 @@ h1, h2, h3, .heading-font {
   color: #fff;
 }
 
+/* ---------- Кнопки-категории на главном экране (Меню/Упаковки/Алко/...) ---------- */
+/* Внешне устроены так же, как переключатель языка выше — тот же приём:
+   пилюли-кнопки, активная подсвечена акцентным цветом темы. */
+.category-nav {
+  position: sticky;
+  top: var(--safe-top);
+  z-index: 15;
+  display: flex;
+  justify-content: center;
+  padding: 10px 10px;
+  margin: 0 auto;
+}
+
+.category-nav-track {
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 6px;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+
+.category-nav-track::-webkit-scrollbar {
+  display: none;
+}
+
+.category-btn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+
+.category-btn:hover {
+  color: #fff;
+}
+
+.category-btn.active {
+  background: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.category-btn-emoji {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.category-btn-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 /* ---------- Theme picker (embedded inside admin panel) ---------- */
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -567,8 +649,9 @@ h1, h2, h3, .heading-font {
   position: relative;
   z-index: 10;
   max-width: 1180px;
-  margin: 10px auto 90px;
+  margin: 10px auto calc(90px + var(--safe-bottom));
   padding: 0 16px;
+  touch-action: pan-y;
 }
 
 .menu-section h2 {
@@ -768,20 +851,64 @@ h1, h2, h3, .heading-font {
 }
 
 .call-button {
+  display: none;
+}
+
+/* ---------- Маленькие круглые кнопки-иконки под товаром (звонок / WhatsApp / поделиться) ---------- */
+.modal-icon-actions {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 4px;
+}
+
+.icon-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.icon-action-emoji {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 13px;
-  border-radius: 14px;
-  border: none;
-  background: var(--accent);
+  font-size: 24px;
   color: #fff;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  transition: transform 0.15s ease;
+}
+
+.icon-action-btn:active .icon-action-emoji {
+  transform: scale(0.92);
+}
+
+.icon-action-btn.call .icon-action-emoji {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+
+.icon-action-btn.whatsapp .icon-action-emoji {
+  background: #25d366;
+}
+
+.icon-action-btn.share .icon-action-emoji {
+  background: #6b6b6b;
+}
+
+.icon-action-label {
+  font-size: 11px;
   font-weight: 700;
-  font-size: 15px;
-  cursor: pointer;
-  text-decoration: none;
+  opacity: 0.75;
+  white-space: nowrap;
 }
 
 /* ---------- Admin ---------- */
@@ -957,6 +1084,40 @@ h1, h2, h3, .heading-font {
   border-radius: 50%;
   cursor: pointer;
   font-size: 16px;
+}
+
+.admin-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Переключатель темы панели администратора (☀️/🌙) ---------- */
+.admin-mode-toggle {
+  display: flex;
+  gap: 3px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.admin-mode-toggle button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.admin-mode-toggle button.active {
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 .admin-item-row {
@@ -1319,7 +1480,7 @@ h1, h2, h3, .heading-font {
   text-align: center;
   color: rgba(255,255,255,0.5);
   font-size: 12px;
-  padding: 0 16px 24px;
+  padding: 0 16px calc(24px + var(--safe-bottom));
 }
 
 @media (min-width: 900px) {
@@ -1421,4 +1582,278 @@ video.mascot-item-image {
   margin-top: 8px;
   font-size: 20px;
   opacity: 1;
+}
+
+/* ---------- Плеер музыки темы ---------- */
+/* Сам iframe (для YouTube) держим смонтированным, но визуально скрытым в
+   углу экрана — так его плеер успевает подготовиться заранее, а звук
+   запускается по касанию кнопки «Войти» (см. MusicPlayer.jsx). */
+.yt-audio-frame {
+  position: fixed;
+  left: -9999px;
+  bottom: 0;
+  width: 2px;
+  height: 2px;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.music-fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 40;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+}
+
+.music-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(78px + var(--safe-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100vw - 32px);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+  animation: music-hint-in 0.4s ease, music-hint-fade 1.4s ease-in-out 2.4s infinite;
+}
+
+@keyframes music-hint-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes music-hint-fade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (max-width: 420px) {
+  .music-hint {
+    white-space: normal;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-hint { animation: music-hint-in 0.01s linear; }
+}
+
+.music-hint-error {
+  background: rgba(140,20,20,0.78);
+}
+
+.music-fab.has-error {
+  animation: none;
+  opacity: 1;
+}
+
+.music-fab-disc {
+  font-size: 22px;
+  display: inline-block;
+}
+
+.music-fab.is-playing .music-fab-disc {
+  animation: music-spin 3.2s linear infinite;
+}
+
+.music-fab:not(.is-playing) {
+  opacity: 0.6;
+}
+
+.music-fab.is-muted {
+  opacity: 0.9;
+  animation: fab-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes fab-pulse {
+  0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+  50% { box-shadow: 0 6px 18px rgba(0,0,0,0.35), 0 0 0 7px rgba(255,255,255,0.14); }
+}
+
+@keyframes music-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-fab.is-playing .music-fab-disc { animation: none; }
+  .music-fab.is-muted { animation: none; }
+}
+
+/* ---------- Вкладки-категории в панели "Товары" админки ---------- */
+.admin-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.admin-category-tab {
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.04);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-category-tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* =====================================================================
+   Тёмная тема панели администратора (кнопка 🌙 в шапке админки).
+   Затрагивает только саму панель управления — то, как сайт выглядит для
+   обычных посетителей, не меняется.
+   ===================================================================== */
+body.admin-dark-mode .admin-panel-overlay {
+  background: rgba(0,0,0,0.88);
+}
+
+body.admin-dark-mode .admin-panel-overlay.nested {
+  background: rgba(0,0,0,0.92);
+}
+
+body.admin-dark-mode .admin-panel,
+body.admin-dark-mode .admin-login-card {
+  background: #211a24;
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .admin-panel-header button,
+body.admin-dark-mode .admin-item-actions button {
+  background: rgba(255,255,255,0.12);
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .admin-mode-toggle {
+  background: rgba(255,255,255,0.1);
+}
+
+body.admin-dark-mode .admin-tab-btn {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.16);
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .admin-item-row,
+body.admin-dark-mode .admin-form,
+body.admin-dark-mode .admin-share-site {
+  background: rgba(255,255,255,0.06);
+}
+
+body.admin-dark-mode .admin-share-site {
+  border-color: rgba(255,255,255,0.14);
+}
+
+body.admin-dark-mode .admin-form label {
+  color: #f2ecf4;
+  opacity: 0.7;
+}
+
+body.admin-dark-mode .admin-form input,
+body.admin-dark-mode .admin-form textarea,
+body.admin-dark-mode .admin-select,
+body.admin-dark-mode .admin-login-card input {
+  background: #2c2430;
+  color: #f2ecf4;
+  border-color: rgba(255,255,255,0.2);
+}
+
+body.admin-dark-mode .admin-form-actions .cancel {
+  background: rgba(255,255,255,0.12);
+  color: #f2ecf4;
+}
+
+body.admin-dark-mode .theme-picker-hint,
+body.admin-dark-mode .link-hint,
+body.admin-dark-mode .admin-item-info span {
+  color: #d9cfe0;
+  opacity: 0.85;
+}
+
+body.admin-dark-mode .admin-category-tab {
+  background: rgba(255,255,255,0.07);
+  color: #f2ecf4;
+  border-color: rgba(255,255,255,0.18);
+}
+
+body.admin-dark-mode .admin-qr-wrap {
+  border-top-color: rgba(255,255,255,0.18);
+}
+
+body.admin-dark-mode .admin-qr-wrap img {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* ---------- Поделиться сайтом / QR-код в панели администратора ---------- */
+.admin-share-site {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.admin-share-site-url {
+  font-size: 13px;
+  font-weight: 700;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.admin-share-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-share-site-actions .admin-add-btn-small {
+  flex: 1 1 auto;
+}
+
+.admin-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(0,0,0,0.15);
+}
+
+.admin-qr-wrap img {
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }

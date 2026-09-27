@@ -307,4 +307,7 @@ export const emptyCustomTheme = () => ({
   // mascotItems: [{ emoji }] | [{ image }] | [{ video }] — эмодзи,
   // картинка по ссылке или видео/GIF-анимация по ссылке.
   mascotItems: [{ emoji: '🎨', size: 1, style: 'bounce' }],
+  // Ссылка на песню темы (YouTube или аудиофайл, например с Google Диска).
+  // Если задана — начинает играть, как только посетитель заходит на сайт.
+  songUrl: null,
 })

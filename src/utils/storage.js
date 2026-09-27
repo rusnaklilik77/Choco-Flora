@@ -4,6 +4,43 @@ const CUSTOM_THEMES_KEY = 'choco-flora-custom-themes'
 const LANG_KEY = 'choco-flora-lang'
 export const SITE_SETTINGS_KEY = 'choco-flora-site-settings'
 
+// Настоящий публичный адрес сайта. Это единственное место в коде, где он
+// прописан — используется как жёсткая "подстраховка", если в настройках
+// (Firestore/localStorage) вдруг оказалась пустая, битая или локальная
+// ссылка (например, http://localhost:5173/, забытая после тестирования
+// на компьютере). Такая ссылка НИКОГДА не должна попасть в QR-код или в
+// кнопку «Поделиться сайтом», которые видят реальные посетители.
+export const CANONICAL_SITE_URL = 'https://choco-flora.vercel.app/'
+
+/**
+ * Проверяет ссылку на сайт и отбрасывает её, если она непригодна для
+ * показа посетителям (пустая, не https, localhost/127.0.0.1/локальная
+ * сеть, файловый путь и т.п.) — в этом случае возвращает CANONICAL_SITE_URL.
+ * Всегда возвращает ссылку, заканчивающуюся на "/".
+ */
+export function sanitizeSiteUrl(url) {
+  const trimmed = (url || '').trim()
+  if (!trimmed) return CANONICAL_SITE_URL
+  let parsed
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return CANONICAL_SITE_URL
+  }
+  const host = parsed.hostname.toLowerCase()
+  const isLocal =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host === '' ||
+    host.endsWith('.local') ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  if (isLocal || parsed.protocol !== 'https:') return CANONICAL_SITE_URL
+  const withSlash = parsed.toString()
+  return withSlash.endsWith('/') ? withSlash : `${withSlash}/`
+}
+
 // Настройки сайта, которые можно менять в режиме админа: название сайта,
 // цвет текста названия (или цвет каждой буквы отдельно), шрифт сайта,
 // ссылка на логотип и телефон для связи в подвале.
@@ -18,6 +55,10 @@ export const DEFAULT_SITE_SETTINGS = {
   fontFamily: 'fredoka',
   logoUrl: '/logo.png',
   phone: '+375 60 524 439',
+  // Публичная ссылка на сайт — используется в админке для кнопки
+  // «Поделиться сайтом», для QR-кода и для ссылок на отдельные карточки
+  // товара (?item=ID). Задаётся в Админка → Настройки.
+  siteUrl: CANONICAL_SITE_URL,
 }
 
 export function loadMenu(fallback) {

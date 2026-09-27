@@ -1,10 +1,9 @@
-// Тексты сайта на трёх языках. Меняются кнопкой-переключателем в шапке
-// сайта и сохраняются в этом браузере (localStorage), чтобы при
-// следующем визите открывался тот же язык.
+// Тексты интерфейса сайта на 3 языках. Язык переключается кнопками RU / RO / EN
+// в шапке сайта (см. LanguageSwitcher.jsx) и запоминается в браузере посетителя.
 //
-// Название блюд, цены и состав — это данные, которые владелец вводит
-// сам в админке, поэтому автоматически не переводятся. Здесь переводятся
-// только подписи и надписи самого интерфейса.
+// ВАЖНО: этого файла раньше не было в проекте, хотя на него ссылались
+// App.jsx и LanguageSwitcher.jsx — из-за этого сайт вообще не собирался.
+// Файл добавлен, чтобы сайт заработал.
 
 export const LANGUAGES = [
   { code: 'ru', label: 'RU' },
@@ -12,34 +11,61 @@ export const LANGUAGES = [
   { code: 'en', label: 'EN' },
 ]
 
-export const TRANSLATIONS = {
+export const DEFAULT_LANG = 'ru'
+
+const TRANSLATIONS = {
   ru: {
-    subtitle: 'десерты с душой',
+    subtitle: 'Десерты, приготовленные с душой',
+    adminBadge: '👑 Админ',
     menuHeading: 'Меню',
-    emptyMenu: 'Меню пока пустое. Загляните позже — мы уже готовим что-то вкусное 🍫',
-    compositionLabel: 'Состав',
-    callButtonPrefix: '📞 Позвонить',
-    adminBadge: '🔓 режим админа — нажмите, чтобы открыть панель',
+    emptyMenu: 'Меню пока пустое — скоро здесь появятся вкусности!',
+    compositionLabel: 'Из чего состоит',
+    callButtonPrefix: 'Заказать по телефону',
+    enterSite: 'Войти',
+    categoryNavLabel: 'Категории меню',
+    categories: {
+      all: 'Меню',
+      packaging: 'Упаковки',
+      alco: 'Алко',
+      choco: 'Шоколад',
+      fruits: 'Фрукты',
+    },
   },
   ro: {
-    subtitle: 'deserturi făcute cu suflet',
+    subtitle: 'Deserturi făcute cu suflet',
+    adminBadge: '👑 Admin',
     menuHeading: 'Meniu',
-    emptyMenu: 'Meniul este momentan gol. Reveniți mai târziu — pregătim ceva delicios 🍫',
+    emptyMenu: 'Meniul este încă gol — în curând vor apărea bunătăți!',
     compositionLabel: 'Compoziție',
-    callButtonPrefix: '📞 Sunați',
-    adminBadge: '🔓 mod administrator — apăsați pentru a deschide panoul',
+    callButtonPrefix: 'Comandă la telefon',
+    enterSite: 'Intră',
+    categoryNavLabel: 'Categoriile meniului',
+    categories: {
+      all: 'Meniu',
+      packaging: 'Ambalaje',
+      alco: 'Alcool',
+      choco: 'Ciocolată',
+      fruits: 'Fructe',
+    },
   },
   en: {
-    subtitle: 'desserts made with heart',
+    subtitle: 'Desserts made with heart',
+    adminBadge: '👑 Admin',
     menuHeading: 'Menu',
-    emptyMenu: "The menu is empty right now. Check back soon — we're cooking up something delicious 🍫",
-    compositionLabel: 'Ingredients',
-    callButtonPrefix: '📞 Call',
-    adminBadge: '🔓 admin mode — click to open the panel',
+    emptyMenu: 'The menu is empty for now — tasty things are coming soon!',
+    compositionLabel: 'What’s inside',
+    callButtonPrefix: 'Order by phone',
+    enterSite: 'Enter',
+    categoryNavLabel: 'Menu categories',
+    categories: {
+      all: 'Menu',
+      packaging: 'Packs',
+      alco: 'Alcohol',
+      choco: 'Choco',
+      fruits: 'Fruits',
+    },
   },
 }
-
-export const DEFAULT_LANG = 'ru'
 
 export function getTranslations(lang) {
   return TRANSLATIONS[lang] || TRANSLATIONS[DEFAULT_LANG]
