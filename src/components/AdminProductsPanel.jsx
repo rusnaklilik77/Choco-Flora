@@ -3,7 +3,14 @@ import { toDirectImageUrl, toDirectImageUrls, isGoogleDriveLink } from '../utils
 import { CATEGORIES, PRODUCT_CATEGORIES, DEFAULT_PRODUCT_CATEGORY, getCategory } from '../data/categories'
 
 const MAX_PHOTOS = 5
-const emptyForm = { name: '', price: '', composition: '', photos: [''], category: DEFAULT_PRODUCT_CATEGORY }
+// Категория больше НЕ выбирается по умолчанию сама (раньше молча
+// подставлялся «Шоколад» — из-за этого забытые/новые позиции незаметно
+// копились в одном разделе, и разделы «Меню»/«Шоколад» выглядели
+// одинаково, как будто «слиты» друг с другом). Теперь категорию нужно
+// выбрать явно — без этого позицию не сохранить, так что каждый раздел
+// (Упаковки/Алко/Шоколад/Фрукты) остаётся отдельной, самостоятельной
+// подборкой товаров.
+const emptyForm = { name: '', price: '', composition: '', photos: [''], category: '' }
 
 function itemToForm(item) {
   const photos = (item.photos && item.photos.length ? item.photos : [''])
@@ -12,7 +19,7 @@ function itemToForm(item) {
     price: item.price,
     composition: item.composition,
     photos: photos.slice(0, MAX_PHOTOS),
-    category: item.category || DEFAULT_PRODUCT_CATEGORY,
+    category: item.category || '',
   }
 }
 
@@ -22,7 +29,7 @@ function formToItem(form) {
     price: form.price.trim() || '—',
     composition: form.composition.trim(),
     photos: toDirectImageUrls(form.photos.map((s) => (s || '').trim()).filter(Boolean)),
-    category: form.category || DEFAULT_PRODUCT_CATEGORY,
+    category: form.category,
   }
 }
 
@@ -78,6 +85,10 @@ export default function AdminProductsPanel({
   }
 
   const saveForm = async () => {
+    if (!form.category) {
+      setError('Выберите категорию — в каком разделе главного экрана показывать товар.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -146,14 +157,15 @@ export default function AdminProductsPanel({
               placeholder="Состав / описание блюда"
             />
 
-            <label htmlFor="product-category" style={{ marginTop: 14 }}>Категория (в каком разделе главного экрана показывать)</label>
+            <label htmlFor="product-category" style={{ marginTop: 14 }}>Категория (в каком разделе главного экрана показывать) *</label>
             <select
               id="product-category"
               name="product-category"
               className="admin-select"
-              value={form.category || DEFAULT_PRODUCT_CATEGORY}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              value={form.category}
+              onChange={(e) => { setForm({ ...form, category: e.target.value }); setError('') }}
             >
+              <option value="" disabled>— выберите раздел —</option>
               {PRODUCT_CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>{c.emoji} {c.labelRu}</option>
               ))}

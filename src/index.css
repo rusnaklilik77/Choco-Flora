@@ -7,6 +7,10 @@ html {
   /* Не даём странице случайно скроллиться по горизонтали — на телефонах
      это может конфликтовать с системным жестом «назад» по краю экрана
      (полоска-индикатор у iPhone / жесты у Android). */
+  /* Явно разрешаем обычный вертикальный скролл пальцем везде на сайте —
+     подстраховка на случай, если у браузера/устройства появится
+     двусмысленность с жестами (свайп категорий и т.п.). */
+  touch-action: pan-y;
 }
 
 html, body, #root {
@@ -19,8 +23,14 @@ html, body, #root {
 body {
   font-family: var(--site-font, 'Nunito', system-ui, sans-serif);
   overflow-x: hidden;
-  overscroll-behavior-y: contain;
   color: var(--text);
+  touch-action: pan-y;
+  /* Явно просим iOS Safari / встроенные WebView-браузеры (Instagram,
+     Telegram и т.п.) использовать инерционный скролл пальцем — на части
+     таких встроенных браузеров без этого свойства вертикальный свайп
+     по обычной странице (не внутри отдельного скролл-контейнера) иногда
+     не запускается вообще. */
+  -webkit-overflow-scrolling: touch;
 }
 
 h1, h2, h3, .heading-font {
@@ -51,6 +61,7 @@ h1, h2, h3, .heading-font {
   transition: background 0.9s ease;
   position: relative;
   overflow-x: hidden;
+  touch-action: pan-y;
 }
 
 /* ---------- Loading screen ---------- */
@@ -662,6 +673,22 @@ h1, h2, h3, .heading-font {
   text-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
+/* Заголовок раздела. Пролистывание карточки товара вверх/вниз (свайпом на
+   телефоне или колесом/тачпадом на компьютере) работает прямо в открытой
+   карточке товара (см. ProductModal.jsx) — отдельная кнопка для входа в
+   этот режим не нужна, обычного тапа по товару в сетке достаточно. */
+.menu-section-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.menu-section-head h2 {
+  margin-bottom: 0;
+}
+
 .menu-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -775,6 +802,13 @@ h1, h2, h3, .heading-font {
   width: 100%;
   aspect-ratio: 4/3;
   background: #ddd;
+  /* Отключаем встроенный скролл/панорамирование браузера на этой области:
+     без этого свайп вверх/вниз по фото сначала пытается прокрутить
+     карточку товара (modal-card имеет overflow-y: auto) и только потом
+     долетает до нашего обработчика в JS — из-за этого жест ощущался как
+     "не работает" или срабатывал через раз. touch-action: none отдаёт
+     весь вертикальный (и горизонтальный) жест целиком нашему коду. */
+  touch-action: none;
 }
 
 .modal-gallery img {
@@ -820,6 +854,44 @@ h1, h2, h3, .heading-font {
 }
 .modal-gallery-nav.prev { left: 8px; }
 .modal-gallery-nav.next { right: 8px; }
+
+/* Кнопки «следующий/предыдущий товар» — переключают карточку товара вверх/
+   вниз (как свайп вверх/вниз по карточке). Закреплены за карточкой окна
+   (не за фотографией), поэтому видны независимо от прокрутки описания. */
+.modal-vertical-nav {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 6;
+}
+
+.modal-vertical-nav-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.modal-vertical-nav-btn:active {
+  transform: scale(0.92);
+}
+
+.modal-vertical-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
 
 .modal-body {
   padding: 18px 20px 24px;

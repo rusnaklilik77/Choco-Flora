@@ -38,6 +38,13 @@ const DARK_MODE_KEY = 'choco_admin_dark_mode'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
+  // Экран загрузки сначала плавно прячется (loading -> false, класс .hidden
+  // с прозрачностью), а через время анимации (0.6s в CSS) полностью
+  // убирается из разметки — а не просто остаётся невидимым поверх сайта.
+  // Так он гарантированно не может случайно перехватывать клики/скролл
+  // (колесо мыши, свайп на телефоне), даже если анимация или переход
+  // отработают не так, как ожидалось.
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true)
   const [dataReady, setDataReady] = useState(false)
   const [themeId, setThemeId] = useState('default')
   const [themes, setThemes] = useState(THEMES)
@@ -65,6 +72,14 @@ export default function App() {
   // жест «назад» на телефоне) закрывает карточку, а не сразу уходит с сайта.
   const [selectedItemId, setSelectedItemId] = useState(null)
   const selectedItem = menu.find((m) => m.id === selectedItemId) || null
+
+  // Позиция открытой карточки товара внутри ТЕКУЩЕГО видимого списка
+  // (с учётом активного фильтра по категории) — нужна для кнопок/свайпа
+  // «следующий/предыдущий товар» в окне карточки: листаем именно тот
+  // раздел, который сейчас открыт, а не вперемешку все категории.
+  const selectedIndex = visibleMenu.findIndex((m) => m.id === selectedItemId)
+  const hasPrevItem = selectedIndex > 0
+  const hasNextItem = selectedIndex !== -1 && selectedIndex < visibleMenu.length - 1
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -98,6 +113,22 @@ export default function App() {
     }
   }
 
+  // Переключение на соседний товар (вверх/вниз) внутри текущего видимого
+  // списка. Используем replaceState (а не pushState, как в openItem) —
+  // иначе каждое пролистывание добавляло бы отдельный шаг в историю
+  // браузера, и кнопка «назад» листала бы товары один за другим вместо
+  // мгновенного возврата на главную.
+  const goToAdjacentItem = (delta) => {
+    if (selectedIndex === -1) return
+    const nextIndex = selectedIndex + delta
+    if (nextIndex < 0 || nextIndex >= visibleMenu.length) return
+    const nextItem = visibleMenu[nextIndex]
+    window.history.replaceState({ item: nextItem.id }, '', `?item=${encodeURIComponent(nextItem.id)}`)
+    setSelectedItemId(nextItem.id)
+  }
+  const goToPrevItem = () => goToAdjacentItem(-1)
+  const goToNextItem = () => goToAdjacentItem(1)
+
   const handleChangeLang = (code) => {
     setLang(code)
     saveLang(code)
@@ -112,21 +143,34 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [])
 
+  // Полностью убираем экран загрузки из разметки чуть позже, чем
+  // начинается его исчезновение (0.6s CSS-переход), — см. комментарий
+  // у showLoadingScreen выше.
+  useEffect(() => {
+    if (loading) return undefined
+    const timer = setTimeout(() => setShowLoadingScreen(false), 700)
+    return () => clearTimeout(timer)
+  }, [loading])
+
   // Свайп влево/вправо по области меню — переключает вкладку категории, как
-  // это привычно на телефоне (жест вместо тапа по кнопке).
+  // это привычно на телефоне (жест вместо тапа по кнопке). Вертикальный
+  // скролл (вверх/вниз) этой областью намеренно не трогаем — это обычная
+  // прокрутка страницы, и она должна работать как везде: пальцем на
+  // телефоне и жестом на тачпаде компьютера, без перехвата в JS.
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches?.[0]?.clientX ?? null
   }
   const handleTouchEnd = (e) => {
     if (touchStartX.current == null) return
     const endX = e.changedTouches?.[0]?.clientX ?? touchStartX.current
-    const delta = endX - touchStartX.current
+    const deltaX = endX - touchStartX.current
     touchStartX.current = null
-    if (Math.abs(delta) < SWIPE_THRESHOLD) return
+
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD) return
     const idx = CATEGORIES.findIndex((c) => c.id === activeCategory)
     if (idx === -1) return
     // Свайп влево (палец двигается к левому краю) -> следующая категория.
-    const nextIdx = delta < 0
+    const nextIdx = deltaX < 0
       ? Math.min(idx + 1, CATEGORIES.length - 1)
       : Math.max(idx - 1, 0)
     setActiveCategory(CATEGORIES[nextIdx].id)
@@ -239,11 +283,13 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <LoadingScreen
-        hidden={!loading}
-        siteTitle={siteSettings.siteTitle}
-        logoUrl={siteSettings.logoUrl}
-      />
+      {showLoadingScreen && (
+        <LoadingScreen
+          hidden={!loading}
+          siteTitle={siteSettings.siteTitle}
+          logoUrl={siteSettings.logoUrl}
+        />
+      )}
 
       <ThemeBackdrop theme={theme} />
       <ParticleBackground
@@ -271,13 +317,25 @@ export default function App() {
       <CategoryNav active={activeCategory} onChange={setActiveCategory} t={t} />
 
       <main className="menu-section" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <h2>{t.categories?.[activeCategory] || t.menuHeading}</h2>
+        <div className="menu-section-head">
+          <h2>{t.categories?.[activeCategory] || t.menuHeading}</h2>
+        </div>
         <MenuGrid items={visibleMenu} onSelect={openItem} emptyText={t.emptyMenu} />
       </main>
 
       <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
 
-      <ProductModal item={selectedItem} onClose={closeItem} t={t} phone={siteSettings.phone} siteUrl={siteSettings.siteUrl} />
+      <ProductModal
+        item={selectedItem}
+        onClose={closeItem}
+        t={t}
+        phone={siteSettings.phone}
+        siteUrl={siteSettings.siteUrl}
+        onPrev={goToPrevItem}
+        onNext={goToNextItem}
+        hasPrev={hasPrevItem}
+        hasNext={hasNextItem}
+      />
 
       {showAdminLogin && (
         <AdminLoginModal
