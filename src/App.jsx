@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { THEMES, getThemeFromList } from './themes'
 import { DEFAULT_MENU } from './data/menuData'
-import { CATEGORIES, DEFAULT_PRODUCT_CATEGORY } from './data/categories'
-import { loadLang, saveLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
+import { DEFAULT_CATALOG, sortGroups, getGroupName, getItemGroupId, makeId } from './data/categories'
+import { loadLang, saveLang, loadAdminLang, saveAdminLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
 import { getDataApi } from './services/dataService'
 import { getTranslations, DEFAULT_LANG } from './i18n'
+import { AdminLangContext, makeAdminT, DEFAULT_ADMIN_LANG } from './adminI18n'
 import { auth, isFirebaseConfigured } from './firebase'
 import { getFontStack } from './fonts'
 
@@ -14,6 +15,9 @@ import ParticleBackground from './components/ParticleBackground'
 import MascotFigure from './components/MascotFigure'
 import Header from './components/Header'
 import CategoryNav from './components/CategoryNav'
+import FilterBar from './components/FilterBar'
+import FilterPickerModal from './components/FilterPickerModal'
+import FilterManagerModal from './components/FilterManagerModal'
 import MenuGrid from './components/MenuGrid'
 import MusicPlayer from './components/MusicPlayer'
 import ProductModal from './components/ProductModal'
@@ -55,16 +59,62 @@ export default function App() {
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [api, setApi] = useState(null)
   const [lang, setLang] = useState(() => loadLang(DEFAULT_LANG))
-  const [activeCategory, setActiveCategory] = useState('all')
+  const [catalog, setCatalog] = useState(DEFAULT_CATALOG)
+  const [activeCategory, setActiveCategory] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState([])
+  const [showFilterPicker, setShowFilterPicker] = useState(false)
+  const [showFilterManager, setShowFilterManager] = useState(false)
+  const [adminLang, setAdminLang] = useState(() => loadAdminLang(DEFAULT_ADMIN_LANG))
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem(DARK_MODE_KEY) === '1')
   const touchStartX = useRef(null)
 
   const theme = getThemeFromList(themes, themeId)
   const t = getTranslations(lang)
 
-  const visibleMenu = activeCategory === 'all'
-    ? menu
-    : menu.filter((item) => (item.category || DEFAULT_PRODUCT_CATEGORY) === activeCategory)
+  const groups = sortGroups(catalog.groups)
+  const filters = catalog.filters
+  const adminCtx = {
+    lang: adminLang,
+    setLang: (code) => { setAdminLang(code); saveAdminLang(code) },
+    t: makeAdminT(adminLang),
+  }
+
+  // Главная группа — первая в списке. Если выбранной группы больше нет
+  // (удалена админом) — переключаемся на главную.
+  const currentGroupId = groups.some((g) => g.id === activeCategory)
+    ? activeCategory
+    : (groups[0]?.id ?? null)
+  const currentGroup = groups.find((g) => g.id === currentGroupId) || null
+
+  // Товары текущей группы (если групп нет совсем — просто всё меню).
+  const groupItems = currentGroupId
+    ? menu.filter((item) => getItemGroupId(item) === currentGroupId)
+    : menu
+
+  // Фильтры, которые ещё существуют (удалённые из выбора пропадают сами).
+  const activeFilterIds = appliedFilters.filter((id) => filters.some((f) => f.id === id))
+
+  // Поиск по названию + фильтры: товар должен иметь ВСЕ выбранные фильтры.
+  const matchesSearch = (item, query) =>
+    !query.trim() || (item.name || '').toLowerCase().includes(query.trim().toLowerCase())
+  const matchesFilters = (item, ids) =>
+    ids.every((id) => (item.filters || []).includes(id))
+  const countMatching = (ids) =>
+    groupItems.filter((item) => matchesSearch(item, searchQuery) && matchesFilters(item, ids)).length
+
+  const visibleMenu = groupItems.filter(
+    (item) => matchesSearch(item, searchQuery) && matchesFilters(item, activeFilterIds),
+  )
+
+  // Сколько товаров текущей группы имеет каждый фильтр (для фишек в окне
+  // выбора) и сколько всего товаров использует фильтр (для окна управления).
+  const filterCountsInGroup = {}
+  const filterUsage = {}
+  filters.forEach((f) => {
+    filterCountsInGroup[f.id] = groupItems.filter((i) => (i.filters || []).includes(f.id)).length
+    filterUsage[f.id] = menu.filter((i) => (i.filters || []).includes(f.id)).length
+  })
 
   // Индивидуальная ссылка на товар (?item=ID, см. ProductModal.jsx) —
   // открывает нужную карточку сразу при заходе по ссылке, а закрытие
@@ -167,13 +217,13 @@ export default function App() {
     touchStartX.current = null
 
     if (Math.abs(deltaX) < SWIPE_THRESHOLD) return
-    const idx = CATEGORIES.findIndex((c) => c.id === activeCategory)
+    const idx = groups.findIndex((g) => g.id === currentGroupId)
     if (idx === -1) return
-    // Свайп влево (палец двигается к левому краю) -> следующая категория.
+    // Свайп влево (палец двигается к левому краю) -> следующая группа.
     const nextIdx = deltaX < 0
-      ? Math.min(idx + 1, CATEGORIES.length - 1)
+      ? Math.min(idx + 1, groups.length - 1)
       : Math.max(idx - 1, 0)
-    setActiveCategory(CATEGORIES[nextIdx].id)
+    setActiveCategory(groups[nextIdx].id)
   }
 
   // Инициализация источника данных (Firebase или локальный режим)
@@ -182,6 +232,7 @@ export default function App() {
     let unsubTheme = () => {}
     let unsubThemes = () => {}
     let unsubSettings = () => {}
+    let unsubCatalog = () => {}
 
     getDataApi().then((dataApi) => {
       // getDataApi() уже дожидается dataApi.init() внутри себя (включая
@@ -192,6 +243,7 @@ export default function App() {
       unsubTheme = dataApi.subscribeSiteTheme((id) => setThemeId(id))
       unsubThemes = dataApi.subscribeThemes((list) => setThemes(list))
       unsubSettings = dataApi.subscribeSiteSettings((settings) => setSiteSettings(settings))
+      unsubCatalog = dataApi.subscribeCatalog((c) => setCatalog(c))
       setDataReady(true)
     }).catch((err) => {
       // Подстраховка на случай непредвиденной ошибки: не оставляем сайт
@@ -205,6 +257,7 @@ export default function App() {
       unsubTheme()
       unsubThemes()
       unsubSettings()
+      unsubCatalog()
     }
   }, [])
 
@@ -258,6 +311,22 @@ export default function App() {
     api?.setSiteTheme(id)
   }
 
+  // ----- Группы и фильтры (редактируются в режиме админа) -----
+  const handleSaveGroups = (nextGroups) => api.updateCatalog({ groups: nextGroups })
+
+  const handleAddFilter = (name) =>
+    api.updateCatalog({ filters: [...filters, { id: makeId('f'), name }] })
+
+  const handleDeleteFilter = async (id) => {
+    await api.updateCatalog({ filters: filters.filter((f) => f.id !== id) })
+    // Убираем удалённый фильтр и у товаров, которые его использовали.
+    const affected = menu.filter((i) => (i.filters || []).includes(id))
+    await Promise.all(
+      affected.map((i) => api.updateMenuItem(i.id, { filters: i.filters.filter((x) => x !== id) })),
+    )
+    setAppliedFilters((cur) => cur.filter((x) => x !== id))
+  }
+
   const handleLogoClick = () => {
     if (isAdmin) {
       setShowAdminPanel(true)
@@ -282,6 +351,7 @@ export default function App() {
   }
 
   return (
+    <AdminLangContext.Provider value={adminCtx}>
     <div className="app-root">
       {showLoadingScreen && (
         <LoadingScreen
@@ -314,13 +384,29 @@ export default function App() {
         logoUrl={siteSettings.logoUrl}
       />
 
-      <CategoryNav active={activeCategory} onChange={setActiveCategory} t={t} />
+      <CategoryNav groups={groups} active={currentGroupId} onChange={setActiveCategory} lang={lang} t={t} />
+
+      <FilterBar
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        activeFiltersCount={activeFilterIds.length}
+        onOpenFilters={() => setShowFilterPicker(true)}
+        t={t}
+      />
 
       <main className="menu-section" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <div className="menu-section-head">
-          <h2>{t.categories?.[activeCategory] || t.menuHeading}</h2>
+          <h2>{currentGroup ? getGroupName(currentGroup, lang) : t.menuHeading}</h2>
         </div>
-        <MenuGrid items={visibleMenu} onSelect={openItem} emptyText={t.emptyMenu} />
+        <MenuGrid
+          items={visibleMenu}
+          onSelect={openItem}
+          emptyText={
+            groupItems.length && (searchQuery.trim() || activeFilterIds.length)
+              ? t.noResults
+              : t.emptyMenu
+          }
+        />
       </main>
 
       <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
@@ -331,11 +417,37 @@ export default function App() {
         t={t}
         phone={siteSettings.phone}
         siteUrl={siteSettings.siteUrl}
+        filters={filters}
         onPrev={goToPrevItem}
         onNext={goToNextItem}
         hasPrev={hasPrevItem}
         hasNext={hasNextItem}
       />
+
+      {showFilterPicker && (
+        <FilterPickerModal
+          key="picker"
+          filters={filters}
+          counts={filterCountsInGroup}
+          selected={activeFilterIds}
+          countMatching={countMatching}
+          isAdmin={isAdmin}
+          onApply={(ids) => { setAppliedFilters(ids); setShowFilterPicker(false) }}
+          onManage={() => setShowFilterManager(true)}
+          onClose={() => setShowFilterPicker(false)}
+          t={t}
+        />
+      )}
+
+      {showFilterManager && isAdmin && api && (
+        <FilterManagerModal
+          filters={filters}
+          usage={filterUsage}
+          onAdd={handleAddFilter}
+          onDelete={handleDeleteFilter}
+          onClose={() => setShowFilterManager(false)}
+        />
+      )}
 
       {showAdminLogin && (
         <AdminLoginModal
@@ -351,6 +463,10 @@ export default function App() {
           onAddItem={(item) => api.addMenuItem(item)}
           onUpdateItem={(id, item) => api.updateMenuItem(id, item)}
           onDeleteItem={(id) => api.deleteMenuItem(id)}
+          groups={groups}
+          filters={filters}
+          onSaveGroups={handleSaveGroups}
+          onManageFilters={() => setShowFilterManager(true)}
           themes={themes}
           currentThemeId={themeId}
           onSelectTheme={handleSelectTheme}
@@ -366,5 +482,6 @@ export default function App() {
         />
       )}
     </div>
+    </AdminLangContext.Provider>
   )
 }

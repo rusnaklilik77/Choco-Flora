@@ -25,7 +25,7 @@ const WHEEL_SWIPE_THRESHOLD = 35
 const WHEEL_SWIPE_COOLDOWN_MS = 500
 
 export default function ProductModal({
-  item, onClose, t, phone, siteUrl,
+  item, onClose, t, phone, siteUrl, filters = [],
   onPrev, onNext, hasPrev, hasNext,
 }) {
   const [photoIndex, setPhotoIndex] = useState(0)
@@ -91,6 +91,8 @@ export default function ProductModal({
     wheelLockedRef.current = true
     setTimeout(() => { wheelLockedRef.current = false }, WHEEL_SWIPE_COOLDOWN_MS)
   }
+
+  const itemFilters = filters.filter((f) => (item.filters || []).includes(f.id))
 
   const photos = item.photos?.length ? item.photos : ['https://picsum.photos/seed/choco/600/450']
 
@@ -198,6 +200,13 @@ export default function ProductModal({
         <div className="modal-body">
           <h3>{item.name}</h3>
           <div className="modal-price">{item.price}</div>
+          {itemFilters.length > 0 && (
+            <div className="modal-tags">
+              {itemFilters.map((f) => (
+                <span className="modal-tag" key={f.id}>{f.name}</span>
+              ))}
+            </div>
+          )}
           <div className="modal-composition-label">{t.compositionLabel}</div>
           <p className="modal-composition">{item.composition}</p>
 

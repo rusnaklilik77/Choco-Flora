@@ -1,16 +1,12 @@
 import { useState } from 'react'
 import { toDirectImageUrl, toDirectImageUrls, isGoogleDriveLink } from '../utils/driveTools'
-import { CATEGORIES, PRODUCT_CATEGORIES, DEFAULT_PRODUCT_CATEGORY, getCategory } from '../data/categories'
+import { useAdminT } from '../adminI18n'
+import { getGroupName, getItemGroupId } from '../data/categories'
 
 const MAX_PHOTOS = 5
-// Категория больше НЕ выбирается по умолчанию сама (раньше молча
-// подставлялся «Шоколад» — из-за этого забытые/новые позиции незаметно
-// копились в одном разделе, и разделы «Меню»/«Шоколад» выглядели
-// одинаково, как будто «слиты» друг с другом). Теперь категорию нужно
-// выбрать явно — без этого позицию не сохранить, так что каждый раздел
-// (Упаковки/Алко/Шоколад/Фрукты) остаётся отдельной, самостоятельной
-// подборкой товаров.
-const emptyForm = { name: '', price: '', composition: '', photos: [''], category: '' }
+// Группа НЕ выбирается по умолчанию сама — её нужно выбрать явно, иначе
+// новые позиции незаметно копились бы в одном разделе.
+const emptyForm = { name: '', price: '', composition: '', photos: [''], category: '', filters: [] }
 
 function itemToForm(item) {
   const photos = (item.photos && item.photos.length ? item.photos : [''])
@@ -20,39 +16,47 @@ function itemToForm(item) {
     composition: item.composition,
     photos: photos.slice(0, MAX_PHOTOS),
     category: item.category || '',
-  }
-}
-
-function formToItem(form) {
-  return {
-    name: form.name.trim() || 'Без названия',
-    price: form.price.trim() || '—',
-    composition: form.composition.trim(),
-    photos: toDirectImageUrls(form.photos.map((s) => (s || '').trim()).filter(Boolean)),
-    category: form.category,
+    filters: Array.isArray(item.filters) ? [...item.filters] : [],
   }
 }
 
 export default function AdminProductsPanel({
-  menu, onAddItem, onUpdateItem, onDeleteItem, onClose,
+  menu, groups, filters, onAddItem, onUpdateItem, onDeleteItem, onManageFilters, onClose,
 }) {
+  const { t, lang } = useAdminT()
   const [editingId, setEditingId] = useState(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [filterCat, setFilterCat] = useState('all')
+  const [filterGroup, setFilterGroup] = useState('all')
+
+  const groupIds = new Set(groups.map((g) => g.id))
+  const isOrphan = (item) => !groupIds.has(getItemGroupId(item))
+  const orphanCount = menu.filter(isOrphan).length
+
+  const formToItem = (f) => ({
+    name: f.name.trim() || t('untitled'),
+    price: f.price.trim() || '—',
+    composition: f.composition.trim(),
+    photos: toDirectImageUrls(f.photos.map((s) => (s || '').trim()).filter(Boolean)),
+    category: f.category,
+    // Оставляем только фильтры, которые ещё существуют.
+    filters: f.filters.filter((id) => filters.some((x) => x.id === id)),
+  })
 
   const startEdit = (item) => {
     setEditingId(item.id)
     setForm(itemToForm(item))
     setCreating(false)
+    setError('')
   }
 
   const startCreate = () => {
     setCreating(true)
     setEditingId(null)
-    setForm(emptyForm)
+    // Если сейчас открыта вкладка конкретной группы — подставляем её.
+    setForm({ ...emptyForm, category: groupIds.has(filterGroup) ? filterGroup : '' })
     setError('')
   }
 
@@ -80,13 +84,17 @@ export default function AdminProductsPanel({
     })
   }
 
-  const addPhotoSlot = () => {
-    setForm((f) => ({ ...f, photos: [...f.photos, ''] }))
-  }
+  const addPhotoSlot = () => setForm((f) => ({ ...f, photos: [...f.photos, ''] }))
+
+  const toggleFilter = (id) =>
+    setForm((f) => ({
+      ...f,
+      filters: f.filters.includes(id) ? f.filters.filter((x) => x !== id) : [...f.filters, id],
+    }))
 
   const saveForm = async () => {
-    if (!form.category) {
-      setError('Выберите категорию — в каком разделе главного экрана показывать товар.')
+    if (!form.category || !groupIds.has(form.category)) {
+      setError(t('productGroupRequired'))
       return
     }
     setSaving(true)
@@ -97,83 +105,115 @@ export default function AdminProductsPanel({
       } else if (editingId) {
         await onUpdateItem(editingId, formToItem(form))
       }
-      // Форму закрываем только если сохранение реально прошло успешно —
-      // иначе введённый текст не должен пропадать.
       cancelForm()
     } catch (err) {
       console.error('[choco-flora] Не удалось сохранить позицию меню:', err)
-      setError('Не удалось сохранить позицию. Проверьте интернет-соединение и попробуйте ещё раз.')
+      setError(`${t('itemSaveFail')} ${t('netError')}`)
     } finally {
       setSaving(false)
     }
   }
 
   const deleteItem = async (id) => {
-    if (confirm('Удалить эту позицию из меню?')) {
+    if (confirm(t('itemDeleteConfirm'))) {
       try {
         await onDeleteItem(id)
       } catch (err) {
         console.error('[choco-flora] Не удалось удалить позицию меню:', err)
-        alert('Не удалось удалить позицию. Проверьте интернет-соединение и попробуйте ещё раз.')
+        alert(`${t('itemDeleteFail')} ${t('netError')}`)
       }
     }
   }
 
   const showForm = creating || editingId
+  const groupOf = (item) => groups.find((g) => g.id === getItemGroupId(item))
+
+  const visibleItems = menu.filter((item) => {
+    if (filterGroup === 'all') return true
+    if (filterGroup === '__none') return isOrphan(item)
+    return getItemGroupId(item) === filterGroup
+  })
 
   return (
     <div className="admin-panel-overlay nested" onClick={onClose}>
       <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
         <div className="admin-panel-header">
-          <h2>🍫 Товары</h2>
-          <button onClick={onClose} aria-label="Закрыть">✕</button>
+          <h2>{t('productsTitle')}</h2>
+          <button onClick={onClose} aria-label={t('close')}>✕</button>
         </div>
 
         {showForm && (
           <div className="admin-form">
-            <label htmlFor="product-name">Название</label>
+            <label htmlFor="product-name">{t('productName')}</label>
             <input
               id="product-name"
               name="product-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Например: Chocolate Lava Cake"
+              placeholder={t('productNamePh')}
             />
-            <label htmlFor="product-price">Цена</label>
+            <label htmlFor="product-price">{t('productPrice')}</label>
             <input
               id="product-price"
               name="product-price"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="Например: 15 BYN"
+              placeholder={t('productPricePh')}
             />
-            <label htmlFor="product-composition">Из чего состоит</label>
+            <label htmlFor="product-composition">{t('productComposition')}</label>
             <textarea
               id="product-composition"
               name="product-composition"
               rows={3}
               value={form.composition}
               onChange={(e) => setForm({ ...form, composition: e.target.value })}
-              placeholder="Состав / описание блюда"
+              placeholder={t('productCompositionPh')}
             />
 
-            <label htmlFor="product-category" style={{ marginTop: 14 }}>Категория (в каком разделе главного экрана показывать) *</label>
+            <label htmlFor="product-category" style={{ marginTop: 14 }}>{t('productGroup')}</label>
             <select
               id="product-category"
               name="product-category"
               className="admin-select"
-              value={form.category}
+              value={groupIds.has(form.category) ? form.category : ''}
               onChange={(e) => { setForm({ ...form, category: e.target.value }); setError('') }}
             >
-              <option value="" disabled>— выберите раздел —</option>
-              {PRODUCT_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>{c.emoji} {c.labelRu}</option>
+              <option value="" disabled>{t('productGroupChoose')}</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.emoji} {getGroupName(g, lang)}</option>
               ))}
             </select>
+            {!groups.length && <span className="link-hint">{t('productNoGroups')}</span>}
 
-            <label style={{ marginTop: 14 }}>
-              Фото товара (до {MAX_PHOTOS} шт., ссылка — можно с Google Диска)
-            </label>
+            <label style={{ marginTop: 14 }}>{t('productFilters')}</label>
+            <p className="theme-picker-hint" style={{ marginTop: 0 }}>{t('productFiltersHint')}</p>
+            {filters.length ? (
+              <div className="admin-filter-chips">
+                {filters.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className={`admin-filter-chip ${form.filters.includes(f.id) ? 'on' : ''}`}
+                    onClick={() => toggleFilter(f.id)}
+                    aria-pressed={form.filters.includes(f.id)}
+                  >
+                    {form.filters.includes(f.id) ? '✓ ' : ''}{f.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="link-hint">{t('productNoFilters')}</span>
+            )}
+            <button
+              type="button"
+              className="admin-add-btn admin-add-btn-small"
+              style={{ marginTop: 10 }}
+              onClick={onManageFilters}
+            >
+              {t('manageFilters')}
+            </button>
+
+            <label style={{ marginTop: 14 }}>{t('photosLabel', { n: MAX_PHOTOS })}</label>
             <div className="link-list">
               {form.photos.map((url, i) => (
                 <div className="link-item" key={i}>
@@ -191,14 +231,14 @@ export default function AdminProductsPanel({
                       placeholder="https://drive.google.com/file/d/..."
                     />
                     {url && isGoogleDriveLink(url) && (
-                      <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                      <span className="link-hint">{t('driveHint')}</span>
                     )}
                   </div>
                   <button
                     type="button"
                     className="remove-x-inline"
                     onClick={() => removePhoto(i)}
-                    title="Стереть ссылку"
+                    title={t('clearLink')}
                   >
                     ✕
                   </button>
@@ -206,7 +246,7 @@ export default function AdminProductsPanel({
               ))}
               {form.photos.length < MAX_PHOTOS && (
                 <button type="button" className="admin-add-btn admin-add-btn-small" onClick={addPhotoSlot}>
-                  ＋ Добавить фото
+                  {t('addPhoto')}
                 </button>
               )}
             </div>
@@ -215,57 +255,74 @@ export default function AdminProductsPanel({
 
             <div className="admin-form-actions">
               <button className="save" onClick={saveForm} disabled={saving}>
-                {saving ? 'Сохраняем…' : 'Сохранить'}
+                {saving ? t('saving') : t('save')}
               </button>
-              <button className="cancel" onClick={cancelForm} disabled={saving}>Отмена</button>
+              <button className="cancel" onClick={cancelForm} disabled={saving}>{t('cancel')}</button>
             </div>
           </div>
         )}
 
         {!showForm && (
           <button className="admin-add-btn" onClick={startCreate}>
-            ＋ Добавить позицию
+            {t('addItem')}
           </button>
         )}
 
         {!showForm && menu.length > 0 && (
           <div className="admin-category-tabs">
-            {CATEGORIES.map((c) => (
+            <button
+              type="button"
+              className={`admin-category-tab ${filterGroup === 'all' ? 'active' : ''}`}
+              onClick={() => setFilterGroup('all')}
+            >
+              {t('allGroups')}
+            </button>
+            {groups.map((g) => (
               <button
-                key={c.id}
+                key={g.id}
                 type="button"
-                className={`admin-category-tab ${filterCat === c.id ? 'active' : ''}`}
-                onClick={() => setFilterCat(c.id)}
+                className={`admin-category-tab ${filterGroup === g.id ? 'active' : ''}`}
+                onClick={() => setFilterGroup(g.id)}
               >
-                {c.emoji} {c.labelRu}
+                {g.emoji} {getGroupName(g, lang)}
               </button>
             ))}
+            {orphanCount > 0 && (
+              <button
+                type="button"
+                className={`admin-category-tab ${filterGroup === '__none' ? 'active' : ''}`}
+                onClick={() => setFilterGroup('__none')}
+              >
+                {t('noGroupTab')} ({orphanCount})
+              </button>
+            )}
           </div>
         )}
 
         <div style={{ marginTop: 16 }}>
-          {menu
-            .filter((item) => filterCat === 'all' || (item.category || DEFAULT_PRODUCT_CATEGORY) === filterCat)
-            .map((item) => (
-            <div className="admin-item-row" key={item.id}>
-              <img
-                src={item.photos?.[0] || 'https://picsum.photos/seed/choco/100/100'}
-                alt={item.name}
-                referrerPolicy="no-referrer"
-              />
-              <div className="admin-item-info">
-                <strong>{item.name}</strong>
-                <span>{item.price} · {getCategory(item.category || DEFAULT_PRODUCT_CATEGORY).emoji} {getCategory(item.category || DEFAULT_PRODUCT_CATEGORY).labelRu}</span>
+          {visibleItems.map((item) => {
+            const g = groupOf(item)
+            return (
+              <div className="admin-item-row" key={item.id}>
+                <img
+                  src={item.photos?.[0] || 'https://picsum.photos/seed/choco/100/100'}
+                  alt={item.name}
+                  referrerPolicy="no-referrer"
+                />
+                <div className="admin-item-info">
+                  <strong>{item.name}</strong>
+                  <span>
+                    {item.price} · {g ? `${g.emoji} ${getGroupName(g, lang)}` : `⚠️ ${t('noGroupLabel')}`}
+                  </span>
+                </div>
+                <div className="admin-item-actions">
+                  <button onClick={() => startEdit(item)} title={t('edit')}>✏️</button>
+                  <button onClick={() => deleteItem(item.id)} title={t('remove')}>🗑️</button>
+                </div>
               </div>
-              <div className="admin-item-actions">
-                <button onClick={() => startEdit(item)} title="Редактировать">✏️</button>
-                <button onClick={() => deleteItem(item.id)} title="Удалить">🗑️</button>
-              </div>
-            </div>
-          ))}
-          {!menu.length && (
-            <p className="theme-picker-hint">Меню пока пустое — добавьте первую позицию.</p>
-          )}
+            )
+          })}
+          {!menu.length && <p className="theme-picker-hint">{t('menuEmpty')}</p>}
         </div>
       </div>
     </div>

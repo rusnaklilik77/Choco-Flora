@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { isFirebaseConfigured, auth } from '../firebase'
+import { useAdminT } from '../adminI18n'
 
 export default function AdminLoginModal({ onClose, onSuccess }) {
+  const { t } = useAdminT()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -13,7 +15,7 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
     setError('')
 
     if (!isFirebaseConfigured) {
-      setError('Firebase не настроен: вход в админку недоступен, пока не заданы ключи Firebase (см. .env).')
+      setError(t('loginNoFirebase'))
       return
     }
 
@@ -32,11 +34,11 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
         err.code === 'auth/wrong-password' ||
         err.code === 'auth/invalid-email'
       ) {
-        setError('Неверный e-mail или пароль')
+        setError(t('loginBad'))
       } else if (err.code === 'auth/too-many-requests') {
-        setError('Слишком много попыток. Попробуйте позже.')
+        setError(t('loginMany'))
       } else {
-        setError('Не удалось выполнить вход. Попробуйте ещё раз.')
+        setError(t('loginFail'))
       }
     } finally {
       setChecking(false)
@@ -46,7 +48,7 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
   return (
     <div className="admin-login-overlay" onClick={onClose}>
       <form className="admin-login-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h3>Админ-панель</h3>
+        <h3>{t('loginTitle')}</h3>
         <input
           type="email"
           id="admin-login-email"
@@ -62,7 +64,7 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
             type={showPassword ? 'text' : 'password'}
             id="admin-login-password"
             name="password"
-            placeholder="Пароль"
+            placeholder={t('loginPassword')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
@@ -71,8 +73,8 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
             type="button"
             className="toggle-password-btn"
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-            title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+            aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+            title={showPassword ? t('hidePassword') : t('showPassword')}
           >
             {showPassword ? (
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -90,7 +92,7 @@ export default function AdminLoginModal({ onClose, onSuccess }) {
         </div>
         {error && <div className="admin-login-error">{error}</div>}
         <button type="submit" className="submit" disabled={checking}>
-          {checking ? 'Проверяем…' : 'Войти'}
+          {checking ? t('loginChecking') : t('loginSubmit')}
         </button>
       </form>
     </div>

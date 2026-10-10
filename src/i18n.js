@@ -22,14 +22,17 @@ const TRANSLATIONS = {
     compositionLabel: 'Из чего состоит',
     callButtonPrefix: 'Заказать по телефону',
     enterSite: 'Войти',
-    categoryNavLabel: 'Категории меню',
-    categories: {
-      all: 'Меню',
-      packaging: 'Упаковки',
-      alco: 'Алко',
-      choco: 'Шоколад',
-      fruits: 'Фрукты',
-    },
+    categoryNavLabel: 'Группы меню',
+    searchPlaceholder: 'Поиск по названию',
+    filtersButton: 'Фильтры',
+    filtersTitle: 'Выберите фильтры',
+    filtersHint: 'Можно выбрать один или несколько. Покажутся товары, у которых есть все выбранные.',
+    filtersManage: 'Управлять',
+    filtersClear: 'Сбросить',
+    filtersShow: 'Показать ({n})',
+    filtersNone: 'Фильтров пока нет.',
+    noResults: 'Ничего не найдено. Попробуйте изменить поиск или фильтры.',
+    clearSearch: 'Очистить поиск',
   },
   ro: {
     subtitle: 'Deserturi făcute cu suflet',
@@ -39,14 +42,17 @@ const TRANSLATIONS = {
     compositionLabel: 'Compoziție',
     callButtonPrefix: 'Comandă la telefon',
     enterSite: 'Intră',
-    categoryNavLabel: 'Categoriile meniului',
-    categories: {
-      all: 'Meniu',
-      packaging: 'Ambalaje',
-      alco: 'Alcool',
-      choco: 'Ciocolată',
-      fruits: 'Fructe',
-    },
+    categoryNavLabel: 'Grupele meniului',
+    searchPlaceholder: 'Caută după nume',
+    filtersButton: 'Filtre',
+    filtersTitle: 'Alege filtrele',
+    filtersHint: 'Poți alege unul sau mai multe. Se vor afișa produsele care le au pe toate cele alese.',
+    filtersManage: 'Gestionează',
+    filtersClear: 'Șterge',
+    filtersShow: 'Arată ({n})',
+    filtersNone: 'Încă nu există filtre.',
+    noResults: 'Nu s-a găsit nimic. Încearcă să schimbi căutarea sau filtrele.',
+    clearSearch: 'Șterge căutarea',
   },
   en: {
     subtitle: 'Desserts made with heart',
@@ -56,17 +62,24 @@ const TRANSLATIONS = {
     compositionLabel: 'What’s inside',
     callButtonPrefix: 'Order by phone',
     enterSite: 'Enter',
-    categoryNavLabel: 'Menu categories',
-    categories: {
-      all: 'Menu',
-      packaging: 'Packs',
-      alco: 'Alcohol',
-      choco: 'Choco',
-      fruits: 'Fruits',
-    },
+    categoryNavLabel: 'Menu groups',
+    searchPlaceholder: 'Search by name',
+    filtersButton: 'Filters',
+    filtersTitle: 'Choose filters',
+    filtersHint: 'You can pick one or more. Items that have all the chosen ones will be shown.',
+    filtersManage: 'Manage',
+    filtersClear: 'Clear',
+    filtersShow: 'Show ({n})',
+    filtersNone: 'No filters yet.',
+    noResults: 'Nothing found. Try changing the search or filters.',
+    clearSearch: 'Clear search',
   },
 }
 
 export function getTranslations(lang) {
   return TRANSLATIONS[lang] || TRANSLATIONS[DEFAULT_LANG]
+}
+
+export function fmt(str, vars) {
+  return (str || '').replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k] !== undefined ? vars[k] : `{${k}}`))
 }

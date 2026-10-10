@@ -1,21 +1,50 @@
-// Категории товаров. Показаны кнопками-вкладками на главном экране сайта
-// (переключаются точно так же, как языки RU/RO/EN в шапке) и используются
-// в админке — чтобы делить товары по разделам и назначать категорию.
+// Группы товаров (Шоколад / Фрукты / Алкоголь и т.д.). Это только набор
+// значений ПО УМОЛЧАНИЮ — при первом запуске они кладутся в базу
+// (settings/catalog), а дальше админ сам добавляет, переименовывает,
+// переставляет и удаляет группы в Админка → Группы.
 //
-// id 'all' — служебный, означает «показать всё меню целиком»: он не
-// назначается товарам, а только используется как первая вкладка-фильтр.
+// Порядок важен: первая группа в списке — главная (открывается первой).
 
-export const CATEGORIES = [
-  { id: 'all', emoji: '📋', labelRu: 'Меню' },
-  { id: 'packaging', emoji: '📦', labelRu: 'Упаковки' },
-  { id: 'alco', emoji: '🍷', labelRu: 'Алко' },
-  { id: 'choco', emoji: '🍫', labelRu: 'Шоколад' },
-  { id: 'fruits', emoji: '🍓', labelRu: 'Фрукты' },
+export const DEFAULT_GROUPS = [
+  {
+    id: 'choco',
+    emoji: '🍫',
+    order: 0,
+    names: { ru: 'Шоколад', ro: 'Ciocolată', en: 'Choco' },
+  },
+  {
+    id: 'fruits',
+    emoji: '🍓',
+    order: 1,
+    names: { ru: 'Фрукты', ro: 'Fructe', en: 'Fruits' },
+  },
+  {
+    id: 'alco',
+    emoji: '🍷',
+    order: 2,
+    names: { ru: 'Алкоголь', ro: 'Alcool', en: 'Alcohol' },
+  },
 ]
 
-// Категории, которые реально можно назначить товару (без служебной "all").
-export const PRODUCT_CATEGORIES = CATEGORIES.filter((c) => c.id !== 'all')
+export const DEFAULT_FILTERS = []
 
-export const DEFAULT_PRODUCT_CATEGORY = 'choco'
+export const DEFAULT_CATALOG = {
+  groups: DEFAULT_GROUPS,
+  filters: DEFAULT_FILTERS,
+}
 
-export const getCategory = (id) => CATEGORIES.find((c) => c.id === id) || PRODUCT_CATEGORIES[0]
+// Товары, сохранённые до появления групп, не имели поля category или
+// имели старое значение — для них считаем группой «choco».
+export const LEGACY_DEFAULT_GROUP_ID = 'choco'
+
+export const sortGroups = (groups) =>
+  [...(groups || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+// Название группы на нужном языке (если перевода нет — русское).
+export const getGroupName = (group, lang) =>
+  (group?.names?.[lang] || group?.names?.ru || group?.names?.ro || group?.names?.en || '').trim()
+
+export const getItemGroupId = (item) => item?.category || LEGACY_DEFAULT_GROUP_ID
+
+export const makeId = (prefix) =>
+  `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`

@@ -1,11 +1,13 @@
 import { THEME_CATEGORIES } from '../themes'
+import { useAdminT } from '../adminI18n'
 
 export default function ThemeSwatchGrid({ themes, currentId, onSelect }) {
+  const { t: tr } = useAdminT()
   return (
     <div className="theme-picker-section">
-      <h3>Тема сайта</h3>
+      <h3>{tr('themePickerTitle')}</h3>
       <p className="theme-picker-hint">
-        Тема видна всем посетителям сайта. Менять её может только админ.
+        {tr('themePickerHint')}
       </p>
 
       {THEME_CATEGORIES.map((cat) => {
@@ -13,7 +15,7 @@ export default function ThemeSwatchGrid({ themes, currentId, onSelect }) {
         if (!themesInCat.length) return null
         return (
           <div key={cat.id}>
-            <div className="theme-category-label">{cat.label}</div>
+            <div className="theme-category-label">{tr('themeCats')[cat.id] || cat.label}</div>
             <div className="theme-grid">
               {themesInCat.map((t) => (
                 <div

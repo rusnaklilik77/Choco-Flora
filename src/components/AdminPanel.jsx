@@ -2,17 +2,21 @@ import { useState } from 'react'
 import AdminProductsPanel from './AdminProductsPanel'
 import AdminThemesPanel from './AdminThemesPanel'
 import AdminSettingsPanel from './AdminSettingsPanel'
+import AdminGroupsPanel from './AdminGroupsPanel'
+import { useAdminT } from '../adminI18n'
 import { sanitizeSiteUrl } from '../utils/storage'
 
 export default function AdminPanel({
   menu, onAddItem, onUpdateItem, onDeleteItem,
+  groups, filters, onSaveGroups, onManageFilters,
   themes, currentThemeId, onSelectTheme,
   onAddTheme, onUpdateTheme, onDeleteTheme,
   settings, onUpdateSettings,
   onClose, onLogout, dataMode,
   darkMode, onToggleDarkMode,
 }) {
-  // null = вкладка не открыта, 'products' | 'themes' = какая попап-панель показана
+  const { t } = useAdminT()
+  // null = вкладка не открыта, 'products' | 'groups' | 'themes' | 'settings'
   const [activeTab, setActiveTab] = useState(null)
   const [showQr, setShowQr] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -43,7 +47,7 @@ export default function AdminPanel({
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2000)
     } catch {
-      window.prompt('Скопируйте ссылку на сайт:', siteUrl)
+      window.prompt(t('copyPrompt'), siteUrl)
     }
   }
 
@@ -51,15 +55,15 @@ export default function AdminPanel({
     <div className="admin-panel-overlay">
       <div className="admin-panel">
         <div className="admin-panel-header">
-          <h2>Панель администратора</h2>
+          <h2>{t('panelTitle')}</h2>
           <div className="admin-panel-header-actions">
-            <div className="admin-mode-toggle" role="group" aria-label="Тема сайта (светлая/тёмная)">
+            <div className="admin-mode-toggle" role="group" aria-label={t('themeToggleLabel')}>
               <button
                 type="button"
                 className={!darkMode ? 'active' : ''}
                 onClick={() => onToggleDarkMode(false)}
-                title="Светлая тема сайта (день)"
-                aria-label="Светлая тема сайта"
+                title={t('lightTitle')}
+                aria-label={t('lightTitle')}
               >
                 ☀️
               </button>
@@ -67,13 +71,13 @@ export default function AdminPanel({
                 type="button"
                 className={darkMode ? 'active' : ''}
                 onClick={() => onToggleDarkMode(true)}
-                title="Тёмная тема сайта (ночь) — затемняет и панель админа, и карточки товара на витрине"
-                aria-label="Тёмная тема сайта"
+                title={t('darkTitle')}
+                aria-label={t('darkTitle')}
               >
                 🌙
               </button>
             </div>
-            <button onClick={onClose} aria-label="Закрыть">✕</button>
+            <button onClick={onClose} aria-label={t('close')}>✕</button>
           </div>
         </div>
 
@@ -86,64 +90,59 @@ export default function AdminPanel({
             border: `1px solid ${isShared ? 'rgba(70,180,110,0.4)' : 'rgba(230,160,40,0.4)'}`,
           }}
         >
-          {isShared ? (
-            <>✅ Режим сохранения: <strong>Firebase</strong> — изменения видят все посетители сайта.</>
-          ) : isFallback ? (
-            <>
-              ⚠️ Не удалось подключиться к Firebase (проверьте ключи и правила доступа Firestore —
-              подробности в консоли браузера, F12). Сейчас сайт временно работает в режиме
-              <strong> «только этот браузер»</strong> — изменения сохраняются, но видны только здесь.
-            </>
-          ) : (
-            <>
-              ⚠️ Режим сохранения: <strong>только этот браузер</strong>. Все изменения (товары, темы)
-              сохраняются, но видны только здесь, на этом устройстве — другие посетители их не увидят.
-              Чтобы изменения были общими для всех, подключите Firebase (см. README.md, раздел
-              «Подключение Firebase»).
-            </>
-          )}
+          {isShared ? t('modeFirebase') : isFallback ? t('modeFallback') : t('modeLocal')}
         </p>
 
         <div className="admin-share-site">
           <div className="admin-share-site-url">🌐 {siteUrl}</div>
           <div className="admin-share-site-actions">
             <button type="button" className="admin-add-btn admin-add-btn-small" onClick={handleShareSite}>
-              {linkCopied ? '✅ Скопировано' : '🔗 Поделиться сайтом'}
+              {linkCopied ? t('copied') : t('shareSite')}
             </button>
             <button
               type="button"
               className="admin-add-btn admin-add-btn-small"
               onClick={() => setShowQr((v) => !v)}
             >
-              📱 {showQr ? 'Скрыть QR-код' : 'QR-код сайта'}
+              📱 {showQr ? t('qrHide') : t('qrShow')}
             </button>
           </div>
           {showQr && (
             <div className="admin-qr-wrap">
-              <img src={qrImageUrl} alt="QR-код на сайт" width={200} height={200} />
+              <img src={qrImageUrl} alt={t('qrAlt')} width={200} height={200} />
               <span className="theme-picker-hint" style={{ marginTop: 6, textAlign: 'center' }}>
-                Дайте отсканировать — камера телефона откроет сайт напрямую.
+                {t('qrHint')}
               </span>
             </div>
           )}
         </div>
 
-        <p className="theme-picker-hint">Выберите раздел, чтобы открыть его.</p>
+        <p className="theme-picker-hint">{t('chooseSection')}</p>
 
         <div className="admin-tabs">
           <button className="admin-tab-btn" onClick={() => setActiveTab('products')}>
             <span className="admin-tab-icon">🍫</span>
-            <span className="admin-tab-label">Товары</span>
+            <span className="admin-tab-label">{t('tabProducts')}</span>
             <span className="admin-tab-count">{menu.length}</span>
+          </button>
+          <button className="admin-tab-btn" onClick={() => setActiveTab('groups')}>
+            <span className="admin-tab-icon">🗂️</span>
+            <span className="admin-tab-label">{t('tabGroups')}</span>
+            <span className="admin-tab-count">{groups.length}</span>
+          </button>
+          <button className="admin-tab-btn" onClick={onManageFilters}>
+            <span className="admin-tab-icon">🏷️</span>
+            <span className="admin-tab-label">{t('tabFilters')}</span>
+            <span className="admin-tab-count">{filters.length}</span>
           </button>
           <button className="admin-tab-btn" onClick={() => setActiveTab('themes')}>
             <span className="admin-tab-icon">🎨</span>
-            <span className="admin-tab-label">Темы</span>
+            <span className="admin-tab-label">{t('tabThemes')}</span>
             <span className="admin-tab-count">{themes.length}</span>
           </button>
           <button className="admin-tab-btn" onClick={() => setActiveTab('settings')}>
             <span className="admin-tab-icon">⚙️</span>
-            <span className="admin-tab-label">Настройки</span>
+            <span className="admin-tab-label">{t('tabSettings')}</span>
           </button>
         </div>
 
@@ -152,16 +151,28 @@ export default function AdminPanel({
           style={{ marginTop: 18, borderColor: 'rgba(0,0,0,0.2)', color: 'inherit' }}
           onClick={onLogout}
         >
-          Выйти из режима админа
+          {t('logout')}
         </button>
       </div>
 
       {activeTab === 'products' && (
         <AdminProductsPanel
           menu={menu}
+          groups={groups}
+          filters={filters}
+          onManageFilters={onManageFilters}
           onAddItem={onAddItem}
           onUpdateItem={onUpdateItem}
           onDeleteItem={onDeleteItem}
+          onClose={() => setActiveTab(null)}
+        />
+      )}
+
+      {activeTab === 'groups' && (
+        <AdminGroupsPanel
+          groups={groups}
+          menu={menu}
+          onSaveGroups={onSaveGroups}
           onClose={() => setActiveTab(null)}
         />
       )}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ThemeSwatchGrid from './ThemeSwatchGrid'
 import { emptyCustomTheme, THEME_CATEGORIES } from '../themes'
 import { deriveThemeColors } from '../utils/colorTools'
+import { useAdminT } from '../adminI18n'
 import {
   toDirectImageUrl, toDirectImageUrls, toDirectVideoUrl,
   isGoogleDriveLink, isGifUrl, getSongKind,
@@ -9,12 +10,7 @@ import {
 
 const MAX_STICKERS = 5
 
-// Тип фигурки-талисмана: эмодзи, картинка по ссылке или видео/GIF-анимация.
-const MASCOT_TYPES = [
-  { id: 'emoji', label: 'Эмодзи' },
-  { id: 'image', label: 'Картинка (ссылка)' },
-  { id: 'video', label: 'Видео / GIF-анимация (ссылка)' },
-]
+const MASCOT_TYPE_IDS = ['emoji', 'image', 'video']
 
 function detectMascotType(mascot) {
   if (!mascot) return 'emoji'
@@ -27,6 +23,7 @@ export default function AdminThemesPanel({
   themes, currentThemeId, onSelectTheme,
   onAddTheme, onUpdateTheme, onDeleteTheme, onClose,
 }) {
+  const { t } = useAdminT()
   const [themeForm, setThemeForm] = useState(null) // null = форма закрыта
   const [themeSaving, setThemeSaving] = useState(false)
   const [themeError, setThemeError] = useState('')
@@ -113,7 +110,7 @@ export default function AdminThemesPanel({
 
   const saveThemeForm = async () => {
     if (!themeForm.name.trim()) {
-      setThemeError('Введите название темы')
+      setThemeError(t('themeNameRequired'))
       return
     }
 
@@ -147,7 +144,7 @@ export default function AdminThemesPanel({
       setThemeForm(null)
     } catch (err) {
       console.error('[choco-flora] Не удалось сохранить тему:', err)
-      setThemeError('Не удалось сохранить тему. Проверьте интернет-соединение и попробуйте ещё раз. (Форма не закрыта, введённые данные не потеряны.)')
+      setThemeError(t('themeSaveFail'))
     } finally {
       setThemeSaving(false)
     }
@@ -155,15 +152,15 @@ export default function AdminThemesPanel({
 
   const deleteThemeHandler = async (theme) => {
     if (themes.length <= 1) {
-      alert('Нельзя удалить последнюю оставшуюся тему сайта — сначала создайте другую.')
+      alert(t('themeLast'))
       return
     }
-    if (confirm(`Удалить тему «${theme.name}»?`)) {
+    if (confirm(t('themeDeleteConfirm', { name: theme.name }))) {
       try {
         await onDeleteTheme(theme.id)
       } catch (err) {
         console.error('[choco-flora] Не удалось удалить тему:', err)
-        alert('Не удалось удалить тему. Проверьте интернет-соединение и попробуйте ещё раз.')
+        alert(t('themeDeleteFail'))
       }
     }
   }
@@ -174,43 +171,41 @@ export default function AdminThemesPanel({
     <div className="admin-panel-overlay nested" onClick={onClose}>
       <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
         <div className="admin-panel-header">
-          <h2>🎨 Темы</h2>
-          <button onClick={onClose} aria-label="Закрыть">✕</button>
+          <h2>{t('themesTitle')}</h2>
+          <button onClick={onClose} aria-label={t('close')}>✕</button>
         </div>
 
         <ThemeSwatchGrid themes={themes} currentId={currentThemeId} onSelect={onSelectTheme} />
 
         <div className="theme-manage-section">
-          <h3 style={{ marginTop: 0 }}>Управление темами</h3>
+          <h3 style={{ marginTop: 0 }}>{t('manageThemes')}</h3>
           <p className="theme-picker-hint">
-            Можно редактировать и удалять абсолютно любую тему — и готовые, и свои.
-            Фон и падающие картинки задаются ссылкой (например, на файл с Google Диска —
-            он должен быть открыт «для всех, у кого есть ссылка»).
+            {t('manageThemesHint')}
           </p>
 
           {!themeForm && (
             <div style={{ marginBottom: 12 }}>
-              {themes.map((t) => (
-                <div className="admin-item-row" key={t.id}>
-                  {t.bgImage ? (
-                    <img src={t.bgImage} alt={t.name} referrerPolicy="no-referrer" />
+              {themes.map((th) => (
+                <div className="admin-item-row" key={th.id}>
+                  {th.bgImage ? (
+                    <img src={th.bgImage} alt={th.name} referrerPolicy="no-referrer" />
                   ) : (
                     <div
                       className="theme-row-swatch"
-                      style={{ background: `linear-gradient(135deg, ${t.colors.bgTo}, ${t.colors.bgFrom})` }}
+                      style={{ background: `linear-gradient(135deg, ${th.colors.bgTo}, ${th.colors.bgFrom})` }}
                     />
                   )}
                   <div className="admin-item-info">
-                    <strong>{t.emoji} {t.name}</strong>
+                    <strong>{th.emoji} {th.name}</strong>
                     <span>
-                      {(t.particleImages || []).length} картинок · {t.category}
-                      {t.bgVideo ? ' · 🎬 видео-фон' : ''}
-                      {t.songUrl ? ' · 🎵 песня' : ''}
+                      {t('themeImages', { n: (th.particleImages || []).length })} · {t('themeCats')[th.category] || th.category}
+                      {th.bgVideo ? t('themeVideoBadge') : ''}
+                      {th.songUrl ? t('themeSongBadge') : ''}
                     </span>
                   </div>
                   <div className="admin-item-actions">
-                    <button onClick={() => startEditTheme(t)} title="Редактировать">✏️</button>
-                    <button onClick={() => deleteThemeHandler(t)} title="Удалить">🗑️</button>
+                    <button onClick={() => startEditTheme(th)} title={t('edit')}>✏️</button>
+                    <button onClick={() => deleteThemeHandler(th)} title={t('remove')}>🗑️</button>
                   </div>
                 </div>
               ))}
@@ -219,22 +214,22 @@ export default function AdminThemesPanel({
 
           {!themeForm && (
             <button className="admin-add-btn" onClick={startCreateTheme}>
-              ＋ Создать тему
+              {t('createTheme')}
             </button>
           )}
 
           {themeForm && (
             <div className="admin-form">
-              <label htmlFor="theme-name">Название темы</label>
+              <label htmlFor="theme-name">{t('themeName')}</label>
               <input
                 id="theme-name"
                 name="theme-name"
                 value={themeForm.name}
                 onChange={(e) => patch({ name: e.target.value })}
-                placeholder="Например: Мой день рождения"
+                placeholder={t('themeNamePh')}
               />
 
-              <label htmlFor="theme-category">Категория (в каком разделе показывать тему)</label>
+              <label htmlFor="theme-category">{t('themeCategory')}</label>
               <select
                 id="theme-category"
                 name="theme-category"
@@ -243,14 +238,14 @@ export default function AdminThemesPanel({
                 className="admin-select"
               >
                 {THEME_CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
+                  <option key={c.id} value={c.id}>{t('themeCats')[c.id] || c.label}</option>
                 ))}
               </select>
 
-              <label htmlFor="theme-bg-image">Ссылка на фон темы (Google Диск или любое фото-хранилище)</label>
+              <label htmlFor="theme-bg-image">{t('themeBg')}</label>
               {themeForm.bgImage ? (
                 <div className="theme-bg-preview">
-                  <img src={toDirectImageUrl(themeForm.bgImage)} alt="Фон темы" referrerPolicy="no-referrer" />
+                  <img src={toDirectImageUrl(themeForm.bgImage)} alt={t('themeBgAlt')} referrerPolicy="no-referrer" />
                   <button type="button" className="remove-x" onClick={() => patch({ bgImage: null })}>✕</button>
                 </div>
               ) : null}
@@ -262,16 +257,14 @@ export default function AdminThemesPanel({
                 placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
               />
               {themeForm.bgImage && isGoogleDriveLink(themeForm.bgImage) && (
-                <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                <span className="link-hint">{t('driveHint')}</span>
               )}
 
               <label htmlFor="theme-bg-video" style={{ marginTop: 14 }}>
-                Видео-фон темы вместо фото (ссылка на .mp4/.webm — свой хостинг, CDN или Google Диск)
+                {t('themeBgVideo')}
               </label>
               <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-                Если заполнено — фон будет проигрываться как зацикленное видео (без звука)
-                вместо фото или узора выше. Видео должно быть лёгким (короткий ролик),
-                чтобы быстро загружаться у посетителей.
+                {t('themeBgVideoHint')}
               </p>
               {themeForm.bgVideo ? (
                 <div className="theme-bg-preview">
@@ -290,14 +283,14 @@ export default function AdminThemesPanel({
                 name="theme-bg-video"
                 value={themeForm.bgVideo || ''}
                 onChange={(e) => patch({ bgVideo: e.target.value })}
-                placeholder="https://.../background.mp4 или ссылка с Google Диска"
+                placeholder={t('themeBgVideoPh')}
               />
               {themeForm.bgVideo && isGoogleDriveLink(themeForm.bgVideo) && (
-                <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                <span className="link-hint">{t('driveHint')}</span>
               )}
 
               <label style={{ marginTop: 14 }}>
-                Падающие картинки-стикеры (ссылки, лучше PNG с прозрачным фоном)
+                {t('stickers')}
               </label>
               <div className="link-list">
                 {stickerList.map((url, i) => (
@@ -312,19 +305,19 @@ export default function AdminThemesPanel({
                       name={`theme-sticker-${i}`}
                       value={url}
                       onChange={(e) => setStickerUrl(i, e.target.value)}
-                      placeholder="Ссылка на картинку"
+                      placeholder={t('stickerPh')}
                     />
                     <button type="button" className="remove-x-inline" onClick={() => removeSticker(i)}>✕</button>
                   </div>
                 ))}
                 {stickerList.length < MAX_STICKERS && (
                   <button type="button" className="admin-add-btn admin-add-btn-small" onClick={addStickerSlot}>
-                    ＋ Добавить картинку
+                    {t('addSticker')}
                   </button>
                 )}
               </div>
 
-              <label htmlFor="theme-particle-size" style={{ marginTop: 14 }}>Размер падающих картинок/эмодзи</label>
+              <label htmlFor="theme-particle-size" style={{ marginTop: 14 }}>{t('particleSize')}</label>
               <div className="range-row">
                 <input
                   type="range"
@@ -339,22 +332,19 @@ export default function AdminThemesPanel({
                 <span className="range-value">×{Number(themeForm.particleSize ?? 1).toFixed(1)}</span>
               </div>
 
-              <label htmlFor="theme-accent-color">Цвет темы</label>
+              <label htmlFor="theme-accent-color">{t('themeColor')}</label>
               <div className="color-picker-row">
                 <input type="color" id="theme-accent-color" name="theme-accent-color" value={themeForm.colors.accent} onChange={handleAccentChange} />
                 <span className="color-picker-hint">
-                  Остальные оттенки (фон, карточки, текст) подберутся автоматически
+                  {t('themeColorHint')}
                 </span>
               </div>
 
               <label htmlFor="theme-mascot-type" style={{ marginTop: 14 }}>
-                Фигурка-талисман (стоит в правом нижнем углу экрана и покачивается)
+                {t('mascot')}
               </label>
               <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-                Выберите тип: эмодзи, картинка по ссылке, или видео/GIF-анимация по ссылке
-                (например, с Google Диска) — так можно добавить любую свою анимацию
-                (в том числе покадровую или футажную, с любым персонажем — материал должен
-                принадлежать вам или быть свободным для использования).
+                {t('mascotHint')}
               </p>
               <select
                 id="theme-mascot-type"
@@ -363,8 +353,8 @@ export default function AdminThemesPanel({
                 value={themeForm.mascotType || 'emoji'}
                 onChange={(e) => patch({ mascotType: e.target.value })}
               >
-                {MASCOT_TYPES.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
+                {MASCOT_TYPE_IDS.map((id) => (
+                  <option key={id} value={id}>{t('mascotTypes')[id]}</option>
                 ))}
               </select>
 
@@ -380,7 +370,7 @@ export default function AdminThemesPanel({
                     placeholder="🎨"
                     style={{ width: 64, fontSize: 24, textAlign: 'center' }}
                   />
-                  <span className="color-picker-hint">Любой эмодзи — он же будет значком темы</span>
+                  <span className="color-picker-hint">{t('mascotEmojiHint')}</span>
                 </div>
               )}
 
@@ -388,7 +378,7 @@ export default function AdminThemesPanel({
                 <>
                   {themeForm.mascotImage ? (
                     <div className="theme-bg-preview mascot-preview">
-                      <img src={toDirectImageUrl(themeForm.mascotImage)} alt="Фигурка-талисман" referrerPolicy="no-referrer" />
+                      <img src={toDirectImageUrl(themeForm.mascotImage)} alt={t('mascotAlt')} referrerPolicy="no-referrer" />
                       <button type="button" className="remove-x" onClick={() => patch({ mascotImage: '' })}>✕</button>
                     </div>
                   ) : null}
@@ -400,7 +390,7 @@ export default function AdminThemesPanel({
                     placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
                   />
                   {themeForm.mascotImage && isGoogleDriveLink(themeForm.mascotImage) && (
-                    <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                    <span className="link-hint">{t('driveHint')}</span>
                   )}
                 </>
               )}
@@ -410,7 +400,7 @@ export default function AdminThemesPanel({
                   {themeForm.mascotVideo ? (
                     <div className="theme-bg-preview mascot-preview">
                       {isGifUrl(themeForm.mascotVideo) ? (
-                        <img src={toDirectVideoUrl(themeForm.mascotVideo)} alt="Анимация талисмана" referrerPolicy="no-referrer" />
+                        <img src={toDirectVideoUrl(themeForm.mascotVideo)} alt={t('mascotAnimAlt')} referrerPolicy="no-referrer" />
                       ) : (
                         <video src={toDirectVideoUrl(themeForm.mascotVideo)} autoPlay loop muted playsInline />
                       )}
@@ -422,15 +412,15 @@ export default function AdminThemesPanel({
                     name="theme-mascot-video"
                     value={themeForm.mascotVideo || ''}
                     onChange={(e) => patch({ mascotVideo: e.target.value })}
-                    placeholder="https://.../mascot.mp4, .webm или .gif (можно с Google Диска)"
+                    placeholder={t('mascotVideoPh')}
                   />
                   {themeForm.mascotVideo && isGoogleDriveLink(themeForm.mascotVideo) && (
-                    <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+                    <span className="link-hint">{t('driveHint')}</span>
                   )}
                 </>
               )}
 
-              <label htmlFor="theme-mascot-size" style={{ marginTop: 14 }}>Размер фигурки-талисмана</label>
+              <label htmlFor="theme-mascot-size" style={{ marginTop: 14 }}>{t('mascotSize')}</label>
               <div className="range-row">
                 <input
                   type="range"
@@ -446,33 +436,23 @@ export default function AdminThemesPanel({
               </div>
 
               <label htmlFor="theme-song-url" style={{ marginTop: 14 }}>
-                🎵 Песня темы (ссылка на YouTube или на аудиофайл, например с Google Диска)
+                {t('songLabel')}
               </label>
               <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-                Если заполнено — сайт попробует включить эту песню сразу же (приглушённо,
-                это браузеры разрешают всегда), а как только посетитель в первый раз где-то
-                тапнет или кликнет на странице — звук просто включится. При переключении темы
-                музыка плавно меняется на песню новой темы.
+                {t('songHint1')}
                 <br />
-                <strong>Какие ссылки работают:</strong> YouTube (любая ссылка на видео/шортс) —
-                надёжнее всего; Google Диск (файл должен быть открыт «Всем, у кого есть ссылка»,
-                и лучше короткий файл — до ~15&nbsp;МБ, иначе Диск может показать страницу
-                подтверждения вместо самого файла); Dropbox; или прямая ссылка на .mp3 с любого
-                хостинга. Ссылки Яндекс.Диска, VK и подобных сервисов «Поделиться» —{' '}
-                <strong>не сработают</strong>, они ведут на страницу просмотра, а не на сам файл.
+                {t('songHint2')}
               </p>
               <input
                 id="theme-song-url"
                 name="theme-song-url"
                 value={themeForm.songUrl || ''}
                 onChange={(e) => patch({ songUrl: e.target.value })}
-                placeholder="https://www.youtube.com/watch?v=... или ссылка на аудиофайл с Google Диска"
+                placeholder={t('songPh')}
               />
               {themeForm.songUrl && (
                 <span className="link-hint">
-                  {getSongKind(themeForm.songUrl) === 'youtube'
-                    ? '🎬 Похоже на ссылку с YouTube — будет проигрываться как звук темы.'
-                    : '🎧 Будет проигрываться как аудиофайл (ссылки с Google Диска и Dropbox конвертируются автоматически). Если это ссылка не на прямой mp3-файл — воспроизведение не сработает.'}
+                  {getSongKind(themeForm.songUrl) === 'youtube' ? t('songYoutube') : t('songAudio')}
                 </span>
               )}
 
@@ -480,9 +460,9 @@ export default function AdminThemesPanel({
 
               <div className="admin-form-actions">
                 <button className="save" onClick={saveThemeForm} disabled={themeSaving}>
-                  {themeSaving ? 'Сохраняем…' : 'Сохранить тему'}
+                  {themeSaving ? t('saving') : t('saveTheme')}
                 </button>
-                <button className="cancel" onClick={cancelThemeForm} disabled={themeSaving}>Отмена</button>
+                <button className="cancel" onClick={cancelThemeForm} disabled={themeSaving}>{t('cancel')}</button>
               </div>
             </div>
           )}

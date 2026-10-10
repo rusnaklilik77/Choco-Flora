@@ -2,6 +2,8 @@ const MENU_KEY = 'choco-flora-menu'
 const THEME_KEY = 'choco-flora-theme'
 const CUSTOM_THEMES_KEY = 'choco-flora-custom-themes'
 const LANG_KEY = 'choco-flora-lang'
+const ADMIN_LANG_KEY = 'choco-flora-admin-lang'
+export const CATALOG_KEY = 'choco-flora-catalog'
 export const SITE_SETTINGS_KEY = 'choco-flora-site-settings'
 
 // Настоящий публичный адрес сайта. Это единственное место в коде, где он
@@ -158,5 +160,49 @@ export function saveLang(lang) {
     localStorage.setItem(LANG_KEY, lang)
   } catch {
     /* ignore */
+  }
+}
+
+// Язык ИНТЕРФЕЙСА АДМИНКИ (русский / румынский) — личная настройка
+// браузера администратора, никак не влияет на язык сайта для посетителей.
+export function loadAdminLang(fallback) {
+  try {
+    const v = localStorage.getItem(ADMIN_LANG_KEY)
+    return v === 'ru' || v === 'ro' ? v : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function saveAdminLang(lang) {
+  try {
+    localStorage.setItem(ADMIN_LANG_KEY, lang)
+  } catch {
+    /* ignore */
+  }
+}
+
+// Каталог: группы товаров и фильтры (общие для всех посетителей).
+export function loadCatalog(fallback) {
+  try {
+    const raw = localStorage.getItem(CATALOG_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return fallback
+    return {
+      groups: Array.isArray(parsed.groups) ? parsed.groups : fallback.groups,
+      filters: Array.isArray(parsed.filters) ? parsed.filters : fallback.filters,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+export function saveCatalog(catalog) {
+  try {
+    localStorage.setItem(CATALOG_KEY, JSON.stringify(catalog))
+  } catch (err) {
+    console.error('[choco-flora] Не удалось сохранить каталог в localStorage:', err)
+    throw err
   }
 }

@@ -16,11 +16,13 @@
 import { db, isFirebaseConfigured } from '../firebase'
 import { DEFAULT_MENU } from '../data/menuData'
 import { THEMES as SEED_THEMES } from '../themes'
+import { DEFAULT_CATALOG } from '../data/categories'
 import {
   loadMenu, saveMenu,
   loadThemeId, saveThemeId,
   loadCustomThemes, saveCustomThemes,
   loadSiteSettings, saveSiteSettings,
+  loadCatalog, saveCatalog, CATALOG_KEY,
   DEFAULT_SITE_SETTINGS, SITE_SETTINGS_KEY,
 } from '../utils/storage'
 
@@ -41,6 +43,10 @@ async function firestoreApi() {
   const menuCol = collection(db, 'menu')
   const themesCol = collection(db, 'themes')
   const siteDoc = doc(db, 'settings', 'site')
+  // Группы и фильтры лежат в одном маленьком документе settings/catalog —
+  // коллекция settings уже открыта правилами Firestore, поэтому менять
+  // firestore.rules не нужно.
+  const catalogDoc = doc(db, 'settings', 'catalog')
 
   async function ensureSeed() {
     const menuSnap = await getDocs(menuCol)
@@ -69,6 +75,11 @@ async function firestoreApi() {
           })
         })
       )
+    }
+
+    const catalogSnap = await getDoc(catalogDoc)
+    if (!catalogSnap.exists()) {
+      await setDoc(catalogDoc, DEFAULT_CATALOG)
     }
 
     const siteSnap = await getDoc(siteDoc)
@@ -130,6 +141,21 @@ async function firestoreApi() {
       })
     },
 
+    subscribeCatalog(callback) {
+      return onSnapshot(catalogDoc, (snap) => {
+        const data = snap.exists() ? snap.data() : {}
+        callback({
+          groups: Array.isArray(data.groups) ? data.groups : DEFAULT_CATALOG.groups,
+          filters: Array.isArray(data.filters) ? data.filters : DEFAULT_CATALOG.filters,
+        })
+      })
+    },
+
+    // patch: { groups?, filters? } — записываем целиком нужный массив.
+    async updateCatalog(patch) {
+      await setDoc(catalogDoc, patch, { merge: true })
+    },
+
     async setSiteTheme(themeId) {
       await setDoc(siteDoc, { themeId, updatedAt: serverTimestamp() }, { merge: true })
     },
@@ -188,7 +214,7 @@ function seedLocalThemesIfNeeded() {
 }
 
 function localApi() {
-  const listeners = { menu: new Set(), theme: new Set(), themes: new Set(), settings: new Set() }
+  const listeners = { menu: new Set(), theme: new Set(), themes: new Set(), settings: new Set(), catalog: new Set() }
 
   // синхронизация между вкладками одного браузера
   window.addEventListener('storage', (e) => {
@@ -201,6 +227,9 @@ function localApi() {
     }
     if (e.key === 'choco-flora-custom-themes') {
       listeners.themes.forEach((cb) => cb(loadCustomThemes()))
+    }
+    if (e.key === CATALOG_KEY) {
+      listeners.catalog.forEach((cb) => cb(loadCatalog(DEFAULT_CATALOG)))
     }
     if (e.key === SITE_SETTINGS_KEY) {
       listeners.settings.forEach((cb) => cb(loadSiteSettings(DEFAULT_SITE_SETTINGS)))
@@ -237,6 +266,18 @@ function localApi() {
       callback(loadSiteSettings(DEFAULT_SITE_SETTINGS))
       listeners.settings.add(callback)
       return () => listeners.settings.delete(callback)
+    },
+
+    subscribeCatalog(callback) {
+      callback(loadCatalog(DEFAULT_CATALOG))
+      listeners.catalog.add(callback)
+      return () => listeners.catalog.delete(callback)
+    },
+
+    async updateCatalog(patch) {
+      const next = { ...loadCatalog(DEFAULT_CATALOG), ...patch }
+      saveCatalog(next)
+      listeners.catalog.forEach((cb) => cb(next))
     },
 
     async setSiteTheme(themeId) {

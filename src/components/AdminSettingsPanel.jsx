@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toDirectImageUrl, isGoogleDriveLink } from '../utils/driveTools'
 import { sanitizeSiteUrl } from '../utils/storage'
 import { SITE_FONTS } from '../fonts'
+import { useAdminT, ADMIN_LANGUAGES } from '../adminI18n'
 
 const DEFAULT_LETTER_COLOR = '#ffffff'
 
@@ -14,6 +15,7 @@ function normalizeLetterColors(title, colors) {
 }
 
 export default function AdminSettingsPanel({ settings, onSave, onClose }) {
+  const { t, lang, setLang } = useAdminT()
   const [form, setForm] = useState({
     ...settings,
     fontFamily: settings.fontFamily || 'fredoka',
@@ -59,7 +61,7 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
 
   const handleSave = async () => {
     if (!form.siteTitle.trim()) {
-      setError('Введите название сайта')
+      setError(t('titleRequired'))
       return
     }
     setSaving(true)
@@ -82,7 +84,7 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
       setSaved(true)
     } catch (err) {
       console.error('[choco-flora] Не удалось сохранить настройки сайта:', err)
-      setError('Не удалось сохранить настройки. Проверьте интернет-соединение и попробуйте ещё раз.')
+      setError(t('settingsSaveFail'))
     } finally {
       setSaving(false)
     }
@@ -95,17 +97,34 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
     <div className="admin-panel-overlay nested" onClick={onClose}>
       <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
         <div className="admin-panel-header">
-          <h2>⚙️ Настройки сайта</h2>
-          <button onClick={onClose} aria-label="Закрыть">✕</button>
+          <h2>{t('settingsTitle')}</h2>
+          <button onClick={onClose} aria-label={t('close')}>✕</button>
+        </div>
+
+        <div className="admin-lang-block">
+          <div className="admin-lang-title">🌐 {t('adminLangTitle')}</div>
+          <div className="admin-lang-options" role="group" aria-label={t('adminLangTitle')}>
+            {ADMIN_LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                className={`admin-lang-btn ${lang === l.code ? 'active' : ''}`}
+                onClick={() => setLang(l.code)}
+                aria-pressed={lang === l.code}
+              >
+                <span className="admin-lang-flag">{l.flag}</span> {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="theme-picker-hint" style={{ margin: '8px 0 0' }}>{t('adminLangHint')}</p>
         </div>
 
         <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-          Название, логотип и номер телефона видны всем посетителям сайта — в шапке
-          страницы и в подвале рядом с телефоном.
+          {t('settingsIntro')}
         </p>
 
         <div className="admin-form">
-          <label htmlFor="site-title">Название сайта</label>
+          <label htmlFor="site-title">{t('siteTitle')}</label>
           <input
             id="site-title"
             name="site-title"
@@ -114,10 +133,9 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             placeholder="Choco-Flora"
           />
 
-          <label style={{ marginTop: 14 }}>Цвет каждой буквы названия (необязательно)</label>
+          <label style={{ marginTop: 14 }}>{t('letterColors')}</label>
           <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-            Задайте цвет отдельным буквам названия сайта. Если ничего не менять —
-            название останется в прежней фирменной раскраске.
+            {t('letterColorsHint')}
           </p>
           <div className="letter-color-grid">
             {(form.siteTitle || '').split('').map((char, i) => (
@@ -130,14 +148,14 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
                   className={letters[i] ? 'is-set' : 'is-empty'}
                   value={letters[i] || DEFAULT_LETTER_COLOR}
                   onChange={(e) => setLetterColor(i, e.target.value)}
-                  title={letters[i] ? 'Цвет буквы (нажмите ✕, чтобы сбросить)' : 'Цвет не задан'}
+                  title={letters[i] ? t('letterColorSet') : t('letterColorEmpty')}
                 />
                 {letters[i] && (
                   <button
                     type="button"
                     className="letter-color-clear"
                     onClick={() => clearLetterColor(i)}
-                    title="Сбросить цвет буквы"
+                    title={t('letterColorReset')}
                   >
                     ✕
                   </button>
@@ -146,7 +164,7 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             ))}
           </div>
 
-          <label htmlFor="site-font" style={{ marginTop: 14 }}>Шрифт сайта</label>
+          <label htmlFor="site-font" style={{ marginTop: 14 }}>{t('siteFont')}</label>
           <select
             id="site-font"
             name="site-font"
@@ -162,16 +180,16 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             className="theme-picker-hint font-preview"
             style={{ fontFamily: currentFont.stack }}
           >
-            {form.siteTitle || 'Choco-Flora'} — пример шрифта
+            {form.siteTitle || 'Choco-Flora'} — {t('fontSample')}
           </p>
 
           <label htmlFor="site-logo" style={{ marginTop: 14 }}>
-            Логотип (ссылка на картинку, например с Google Диска)
+            {t('logoLabel')}
           </label>
           <div className="theme-bg-preview">
             <img
               src={form.logoUrl ? toDirectImageUrl(form.logoUrl) : '/logo.png'}
-              alt="Логотип"
+              alt={t('logoAlt')}
               referrerPolicy="no-referrer"
             />
             {form.logoUrl && form.logoUrl !== '/logo.png' && (
@@ -186,12 +204,12 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             placeholder="https://drive.google.com/file/d/.../view?usp=sharing"
           />
           {form.logoUrl && isGoogleDriveLink(form.logoUrl) ? (
-            <span className="link-hint">Ссылка с Google Диска — конвертируется в прямую автоматически.</span>
+            <span className="link-hint">{t('driveHint')}</span>
           ) : (
-            <span className="link-hint">Поле пустое — используется логотип по умолчанию.</span>
+            <span className="link-hint">{t('logoEmptyHint')}</span>
           )}
 
-          <label htmlFor="site-phone" style={{ marginTop: 14 }}>Номер телефона</label>
+          <label htmlFor="site-phone" style={{ marginTop: 14 }}>{t('phone')}</label>
           <input
             id="site-phone"
             name="site-phone"
@@ -202,10 +220,9 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
             placeholder="+373 69 716 541"
           />
 
-          <label htmlFor="site-url" style={{ marginTop: 14 }}>Ссылка на сайт</label>
+          <label htmlFor="site-url" style={{ marginTop: 14 }}>{t('siteUrl')}</label>
           <p className="theme-picker-hint" style={{ marginTop: 0 }}>
-            Используется в кнопке «Поделиться сайтом», в QR-коде и в ссылках на
-            отдельные карточки товара.
+            {t('siteUrlHint')}
           </p>
           <input
             id="site-url"
@@ -217,13 +234,13 @@ export default function AdminSettingsPanel({ settings, onSave, onClose }) {
           />
 
           {error && <div className="admin-login-error">{error}</div>}
-          {saved && !error && <div className="settings-saved-hint">Настройки сохранены ✓</div>}
+          {saved && !error && <div className="settings-saved-hint">{t('settingsSaved')}</div>}
 
           <div className="admin-form-actions">
             <button className="save" onClick={handleSave} disabled={saving}>
-              {saving ? 'Сохраняем…' : 'Сохранить'}
+              {saving ? t('saving') : t('save')}
             </button>
-            <button className="cancel" onClick={onClose} disabled={saving}>Отмена</button>
+            <button className="cancel" onClick={onClose} disabled={saving}>{t('cancel')}</button>
           </div>
         </div>
       </div>
