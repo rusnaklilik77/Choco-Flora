@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import AdminProductsPanel from './AdminProductsPanel'
 import AdminThemesPanel from './AdminThemesPanel'
 import AdminSettingsPanel from './AdminSettingsPanel'
@@ -9,6 +9,7 @@ import { sanitizeSiteUrl } from '../utils/storage'
 export default function AdminPanel({
   menu, onAddItem, onUpdateItem, onDeleteItem,
   groups, filters, onSaveGroups, onManageFilters,
+  onExportBackup, onImportBackup,
   themes, currentThemeId, onSelectTheme,
   onAddTheme, onUpdateTheme, onDeleteTheme,
   settings, onUpdateSettings,
@@ -20,6 +21,60 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState(null)
   const [showQr, setShowQr] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [backupBusy, setBackupBusy] = useState(false)
+  const importInputRef = useRef(null)
+
+  // Скачать резервную копию всех данных сайта одним JSON-файлом.
+  const handleDownloadBackup = async () => {
+    setBackupBusy(true)
+    try {
+      const data = await onExportBackup()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `choco-flora-backup-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      console.error('[choco-flora] Ошибка выгрузки копии:', err)
+      alert(t('backupDownloadFail'))
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  // Восстановление: только добавляет/обновляет записи по ID, ничего не удаляет.
+  const handleRestoreFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    let data
+    try {
+      data = JSON.parse(await file.text())
+    } catch {
+      alert(t('backupBadFile'))
+      return
+    }
+    if (!data || data.app !== 'choco-flora-backup' || !Array.isArray(data.menu)) {
+      alert(t('backupBadFile'))
+      return
+    }
+    const vars = { items: data.menu.length, themes: Array.isArray(data.themes) ? data.themes.length : 0 }
+    if (!confirm(t('backupRestoreConfirm', vars))) return
+    setBackupBusy(true)
+    try {
+      await onImportBackup(data)
+      alert(t('backupRestoreDone', vars))
+    } catch (err) {
+      console.error('[choco-flora] Ошибка восстановления копии:', err)
+      alert(t('backupRestoreFail'))
+    } finally {
+      setBackupBusy(false)
+    }
+  }
 
   const isShared = dataMode === 'firebase'
   const isFallback = dataMode === 'local-fallback'
@@ -144,6 +199,20 @@ export default function AdminPanel({
             <span className="admin-tab-icon">⚙️</span>
             <span className="admin-tab-label">{t('tabSettings')}</span>
           </button>
+        </div>
+
+        <div className="admin-share-site" style={{ marginTop: 14 }}>
+          <div className="admin-share-site-url">{t('backupTitle')}</div>
+          <span className="theme-picker-hint">{t('backupHint')}</span>
+          <div className="admin-share-site-actions">
+            <button type="button" className="admin-add-btn admin-add-btn-small" disabled={backupBusy} onClick={handleDownloadBackup}>
+              {t('backupDownload')}
+            </button>
+            <button type="button" className="admin-add-btn admin-add-btn-small" disabled={backupBusy} onClick={() => importInputRef.current?.click()}>
+              {t('backupRestore')}
+            </button>
+            <input ref={importInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleRestoreFile} />
+          </div>
         </div>
 
         <button

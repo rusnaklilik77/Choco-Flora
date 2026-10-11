@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { THEMES, getThemeFromList } from './themes'
-import { DEFAULT_MENU } from './data/menuData'
 import { DEFAULT_CATALOG, sortGroups, getGroupName, getItemGroupId, makeId } from './data/categories'
-import { loadLang, saveLang, loadAdminLang, saveAdminLang, DEFAULT_SITE_SETTINGS } from './utils/storage'
+import { loadLang, saveLang, loadAdminLang, saveAdminLang, DEFAULT_SITE_SETTINGS, loadBootCache, saveBootCache } from './utils/storage'
 import { getDataApi } from './services/dataService'
 import { getTranslations, DEFAULT_LANG } from './i18n'
 import { AdminLangContext, makeAdminT, DEFAULT_ADMIN_LANG } from './adminI18n'
@@ -41,7 +40,13 @@ const SWIPE_THRESHOLD = 60
 const DARK_MODE_KEY = 'choco_admin_dark_mode'
 
 export default function App() {
-  const [loading, setLoading] = useState(true)
+  // Экран загрузки висит, пока НЕ выполнены все три условия: пришли данные
+  // из базы (тема, настройки, группы, товары), прогрузились главные
+  // картинки (фон темы и первые карточки) и прошло минимальное время
+  // показа. Благодаря этому сначала НЕ мелькает «прежняя» встроенная тема.
+  const [minTimePassed, setMinTimePassed] = useState(false)
+  const [assetsReady, setAssetsReady] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   // Экран загрузки сначала плавно прячется (loading -> false, класс .hidden
   // с прозрачностью), а через время анимации (0.6s в CSS) полностью
   // убирается из разметки — а не просто остаётся невидимым поверх сайта.
@@ -52,7 +57,7 @@ export default function App() {
   const [dataReady, setDataReady] = useState(false)
   const [themeId, setThemeId] = useState('default')
   const [themes, setThemes] = useState(THEMES)
-  const [menu, setMenu] = useState(DEFAULT_MENU)
+  const [menu, setMenu] = useState([])
   const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
@@ -68,6 +73,7 @@ export default function App() {
   const [adminLang, setAdminLang] = useState(() => loadAdminLang(DEFAULT_ADMIN_LANG))
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem(DARK_MODE_KEY) === '1')
   const touchStartX = useRef(null)
+  const bootCache = useRef(loadBootCache()).current
 
   const theme = getThemeFromList(themes, themeId)
   const t = getTranslations(lang)
@@ -184,23 +190,68 @@ export default function App() {
     saveLang(code)
   }
 
-  // Экран загрузки закрывается сам, без отдельной кнопки — музыку темы
-  // при этом запускает MusicPlayer.jsx: пробует включить сразу, а если
-  // браузер это заблокирует (обычная ситуация без действия посетителя),
-  // запускает её по самому первому касанию/клику где угодно на странице.
+  // Минимальное время показа экрана загрузки (чтобы он не «моргал», если
+  // всё загрузилось мгновенно) и страховка: если база не отвечает дольше
+  // 20 секунд — показываем понятную ошибку вместо вечной загрузки.
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1900)
-    return () => clearTimeout(timer)
+    const minTimer = setTimeout(() => setMinTimePassed(true), 1200)
+    const failTimer = setTimeout(() => {
+      setLoadError((prev) => prev || { code: 'timeout' })
+    }, 20000)
+    return () => {
+      clearTimeout(minTimer)
+      clearTimeout(failTimer)
+    }
   }, [])
+
+  const loading = loadError ? false : !(dataReady && assetsReady && minTimePassed)
+
+  // Когда данные пришли — заранее подгружаем фон темы и первые карточки,
+  // чтобы к моменту скрытия экрана загрузки они уже были готовы. Ждём не
+  // дольше 5 секунд (медленный хостинг картинок не должен вешать сайт).
+  useEffect(() => {
+    if (!dataReady || assetsReady) return undefined
+    const urls = []
+    if (theme.bgImage && !theme.bgVideo) urls.push(theme.bgImage)
+    visibleMenu.slice(0, 8).forEach((it) => {
+      if (it.photos?.[0]) urls.push(it.photos[0])
+    })
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      setAssetsReady(true)
+    }
+    const timer = setTimeout(finish, 5000)
+    if (!urls.length) {
+      finish()
+      return () => clearTimeout(timer)
+    }
+    let left = urls.length
+    const onSettled = () => {
+      left -= 1
+      if (left <= 0) finish()
+    }
+    urls.forEach((url) => {
+      const img = new Image()
+      img.referrerPolicy = 'no-referrer'
+      img.onload = onSettled
+      img.onerror = onSettled
+      img.src = url
+    })
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady])
 
   // Полностью убираем экран загрузки из разметки чуть позже, чем
   // начинается его исчезновение (0.6s CSS-переход), — см. комментарий
   // у showLoadingScreen выше.
   useEffect(() => {
     if (loading) return undefined
+    if (loadError) return undefined
     const timer = setTimeout(() => setShowLoadingScreen(false), 700)
     return () => clearTimeout(timer)
-  }, [loading])
+  }, [loading, loadError])
 
   // Свайп влево/вправо по области меню — переключает вкладку категории, как
   // это привычно на телефоне (жест вместо тапа по кнопке). Вертикальный
@@ -226,40 +277,51 @@ export default function App() {
     setActiveCategory(groups[nextIdx].id)
   }
 
-  // Инициализация источника данных (Firebase или локальный режим)
+  // Инициализация источника данных (Firebase или локальный режим).
+  // dataReady становится true только когда ПРИШЛИ первые данные по всем
+  // пяти подпискам: товары, список тем, выбранная тема, настройки сайта и
+  // группы/фильтры.
   useEffect(() => {
-    let unsubMenu = () => {}
-    let unsubTheme = () => {}
-    let unsubThemes = () => {}
-    let unsubSettings = () => {}
-    let unsubCatalog = () => {}
+    let cancelled = false
+    let unsubs = []
+    const got = new Set()
+    const mark = (key) => {
+      got.add(key)
+      if (got.size >= 5 && !cancelled) setDataReady(true)
+    }
+    const fail = (err) => {
+      console.error('[choco-flora] Не удалось загрузить данные:', err)
+      if (!cancelled) setLoadError({ code: err?.code || 'unknown' })
+    }
 
     getDataApi().then((dataApi) => {
-      // getDataApi() уже дожидается dataApi.init() внутри себя (включая
-      // автопереключение на локальный режим, если Firebase недоступен),
-      // так что здесь просто подписываемся на данные.
+      if (cancelled) return
       setApi(dataApi)
-      unsubMenu = dataApi.subscribeMenu((items) => setMenu(items))
-      unsubTheme = dataApi.subscribeSiteTheme((id) => setThemeId(id))
-      unsubThemes = dataApi.subscribeThemes((list) => setThemes(list))
-      unsubSettings = dataApi.subscribeSiteSettings((settings) => setSiteSettings(settings))
-      unsubCatalog = dataApi.subscribeCatalog((c) => setCatalog(c))
-      setDataReady(true)
-    }).catch((err) => {
-      // Подстраховка на случай непредвиденной ошибки: не оставляем сайт
-      // в вечном состоянии загрузки.
-      console.error('[choco-flora] Не удалось инициализировать хранилище данных:', err)
-      setDataReady(true)
-    })
+      unsubs = [
+        dataApi.subscribeMenu((items) => { setMenu(items); mark('menu') }, fail),
+        dataApi.subscribeSiteTheme((id) => { setThemeId(id); mark('themeId') }, fail),
+        dataApi.subscribeThemes((list) => { setThemes(list); mark('themes') }, fail),
+        dataApi.subscribeSiteSettings((settings) => { setSiteSettings(settings); mark('settings') }, fail),
+        dataApi.subscribeCatalog((c) => { setCatalog(c); mark('catalog') }, fail),
+      ]
+    }).catch(fail)
 
     return () => {
-      unsubMenu()
-      unsubTheme()
-      unsubThemes()
-      unsubSettings()
-      unsubCatalog()
+      cancelled = true
+      unsubs.forEach((u) => u())
     }
   }, [])
+
+  // Запоминаем в этом браузере название, логотип и цвета темы — чтобы при
+  // следующем заходе экран загрузки сразу выглядел «как надо».
+  useEffect(() => {
+    if (!dataReady) return
+    saveBootCache({
+      siteTitle: siteSettings.siteTitle,
+      logoUrl: siteSettings.logoUrl,
+      colors: theme.colors,
+    })
+  }, [dataReady, siteSettings.siteTitle, siteSettings.logoUrl, theme])
 
   // Название сайта отражается и в заголовке вкладки браузера.
   useEffect(() => {
@@ -286,13 +348,16 @@ export default function App() {
 
   useEffect(() => {
     const r = document.documentElement
-    r.style.setProperty('--bg-from', theme.colors.bgFrom)
-    r.style.setProperty('--bg-to', theme.colors.bgTo)
-    r.style.setProperty('--accent', theme.colors.accent)
-    r.style.setProperty('--accent2', theme.colors.accent2)
-    r.style.setProperty('--card', theme.colors.card)
-    r.style.setProperty('--text', theme.colors.text)
-  }, [theme])
+    // Пока данные не пришли — красим экран загрузки в цвета, сохранённые
+    // с прошлого визита (если они есть), а не в цвета встроенной темы.
+    const c = !dataReady && bootCache.colors ? bootCache.colors : theme.colors
+    r.style.setProperty('--bg-from', c.bgFrom)
+    r.style.setProperty('--bg-to', c.bgTo)
+    r.style.setProperty('--accent', c.accent)
+    r.style.setProperty('--accent2', c.accent2)
+    r.style.setProperty('--card', c.card)
+    r.style.setProperty('--text', c.text)
+  }, [theme, dataReady])
 
   // Применяем тёмную тему сайта ко всему приложению (не только пока
   // открыта панель админа) и запоминаем выбор в этом браузере.
@@ -356,73 +421,80 @@ export default function App() {
       {showLoadingScreen && (
         <LoadingScreen
           hidden={!loading}
-          siteTitle={siteSettings.siteTitle}
-          logoUrl={siteSettings.logoUrl}
+          siteTitle={dataReady ? siteSettings.siteTitle : (bootCache.siteTitle || siteSettings.siteTitle)}
+          logoUrl={dataReady ? siteSettings.logoUrl : (bootCache.logoUrl || siteSettings.logoUrl)}
+          error={loadError}
+          onRetry={() => window.location.reload()}
         />
       )}
 
-      <ThemeBackdrop theme={theme} />
-      <ParticleBackground
-        particles={theme.particles}
-        particleImages={theme.particleImages}
-        themeId={theme.id}
-        sizeScale={theme.particleSize ?? 1}
-      />
-      <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
+      {dataReady && (
+        <>
+          <ThemeBackdrop theme={theme} />
+          <ParticleBackground
+            particles={theme.particles}
+            particleImages={theme.particleImages}
+            themeId={theme.id}
+            sizeScale={theme.particleSize ?? 1}
+          />
+          <MascotFigure mascotItems={theme.mascotItems} themeId={theme.id} accent={theme.colors.accent} />
 
-      <MusicPlayer songUrl={theme.songUrl} />
+          <MusicPlayer songUrl={theme.songUrl} />
 
-      <Header
-        isAdmin={isAdmin}
-        onLogoClick={handleLogoClick}
-        t={t}
-        lang={lang}
-        onChangeLang={handleChangeLang}
-        siteTitle={siteSettings.siteTitle}
-        titleColor={siteSettings.titleColor}
-        titleLetterColors={siteSettings.titleLetterColors}
-        logoUrl={siteSettings.logoUrl}
-      />
+          <Header
+            isAdmin={isAdmin}
+            onLogoClick={handleLogoClick}
+            t={t}
+            lang={lang}
+            onChangeLang={handleChangeLang}
+            siteTitle={siteSettings.siteTitle}
+            titleColor={siteSettings.titleColor}
+            titleLetterColors={siteSettings.titleLetterColors}
+            logoUrl={siteSettings.logoUrl}
+          />
 
-      <CategoryNav groups={groups} active={currentGroupId} onChange={setActiveCategory} lang={lang} t={t} />
+          <CategoryNav groups={groups} active={currentGroupId} onChange={setActiveCategory} lang={lang} t={t} />
 
-      <FilterBar
-        query={searchQuery}
-        onQueryChange={setSearchQuery}
-        activeFiltersCount={activeFilterIds.length}
-        onOpenFilters={() => setShowFilterPicker(true)}
-        t={t}
-      />
+          <FilterBar
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            activeFiltersCount={activeFilterIds.length}
+            onOpenFilters={() => setShowFilterPicker(true)}
+            t={t}
+          />
 
-      <main className="menu-section" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <div className="menu-section-head">
-          <h2>{currentGroup ? getGroupName(currentGroup, lang) : t.menuHeading}</h2>
-        </div>
-        <MenuGrid
-          items={visibleMenu}
-          onSelect={openItem}
-          emptyText={
-            groupItems.length && (searchQuery.trim() || activeFilterIds.length)
-              ? t.noResults
-              : t.emptyMenu
-          }
-        />
-      </main>
+          <main className="menu-section" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+            <div className="menu-section-head">
+              <h2>{currentGroup ? getGroupName(currentGroup, lang) : t.menuHeading}</h2>
+            </div>
+            <MenuGrid
+              items={visibleMenu}
+              onSelect={openItem}
+              emptyText={
+                groupItems.length && (searchQuery.trim() || activeFilterIds.length)
+                  ? t.noResults
+                  : t.emptyMenu
+              }
+            />
+          </main>
 
-      <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
+          <p className="footer-note">{siteSettings.siteTitle} · {siteSettings.phone}</p>
 
-      <ProductModal
-        item={selectedItem}
-        onClose={closeItem}
-        t={t}
-        phone={siteSettings.phone}
-        siteUrl={siteSettings.siteUrl}
-        filters={filters}
-        onPrev={goToPrevItem}
-        onNext={goToNextItem}
-        hasPrev={hasPrevItem}
-        hasNext={hasNextItem}
-      />
+          <ProductModal
+            item={selectedItem}
+            onClose={closeItem}
+            t={t}
+            phone={siteSettings.phone}
+            siteUrl={siteSettings.siteUrl}
+            filters={filters}
+            onPrev={goToPrevItem}
+            onNext={goToNextItem}
+            hasPrev={hasPrevItem}
+            hasNext={hasNextItem}
+          />
+
+        </>
+      )}
 
       {showFilterPicker && (
         <FilterPickerModal
@@ -466,6 +538,8 @@ export default function App() {
           groups={groups}
           filters={filters}
           onSaveGroups={handleSaveGroups}
+          onExportBackup={() => api.exportAll()}
+          onImportBackup={(data) => api.importAll(data)}
           onManageFilters={() => setShowFilterManager(true)}
           themes={themes}
           currentThemeId={themeId}

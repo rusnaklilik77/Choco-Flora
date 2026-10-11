@@ -13,7 +13,7 @@
 // Firestore остаются крошечными и бесплатного плана Spark хватает с
 // огромным запасом.
 
-import { db, isFirebaseConfigured } from '../firebase'
+import { db, auth, isFirebaseConfigured } from '../firebase'
 import { DEFAULT_MENU } from '../data/menuData'
 import { THEMES as SEED_THEMES } from '../themes'
 import { DEFAULT_CATALOG } from '../data/categories'
@@ -40,6 +40,18 @@ async function firestoreApi() {
     getDoc, getDocs, serverTimestamp,
   } = await import('firebase/firestore')
 
+  // Слушатель, который игнорирует «снимки из кэша». Если у посетителя
+  // нет связи с базой, Firestore сначала отдаёт ПУСТОЙ снимок из локального
+  // кэша — и сайт показывал бы «Меню пока пустое», хотя товары на месте.
+  // Именно это выглядело как «всё исчезло». Теперь данные принимаются
+  // только когда они реально пришли с сервера; иначе через 20 секунд
+  // показывается экран ошибки с кнопкой «Повторить» (см. App.jsx).
+  const listen = (ref, cb, onError) =>
+    onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
+      if (snap.metadata.fromCache) return
+      cb(snap)
+    }, onError)
+
   const menuCol = collection(db, 'menu')
   const themesCol = collection(db, 'themes')
   const siteDoc = doc(db, 'settings', 'site')
@@ -48,55 +60,67 @@ async function firestoreApi() {
   // firestore.rules не нужно.
   const catalogDoc = doc(db, 'settings', 'catalog')
 
+  // Первичное наполнение базы (меню, встроенные темы, группы/фильтры) —
+  // ОДИН раз за всю жизнь проекта. Раньше сайт при КАЖДОМ запуске
+  // проверял «а не пуста ли коллекция?» и, если пуста, заново записывал
+  // демо-товары; к тому же любая ошибка здесь молча переключала сайт на
+  // локальный режим, и опубликованные товары «пропадали». Теперь:
+  //  - наполнение делается только вошедшим админом (посетитель писать не
+  //    может, и пытаться незачем);
+  //  - после первого наполнения в settings/site ставится флаг seeded, и
+  //    больше сайт ничего не добавляет сам — удалённое вами не вернётся;
+  //  - любая ошибка здесь только пишется в консоль и НЕ влияет на сайт.
   async function ensureSeed() {
-    const menuSnap = await getDocs(menuCol)
-    if (menuSnap.empty) {
-      await Promise.all(
-        DEFAULT_MENU.map((item) => {
-          const { id, ...rest } = item
-          return setDoc(doc(db, 'menu', id), rest)
-        })
-      )
-    }
+    try {
+      if (auth && typeof auth.authStateReady === 'function') await auth.authStateReady()
+      if (!auth || !auth.currentUser) return
 
-    // Встроенные темы кладём в базу один раз при первом запуске — дальше
-    // это обычные документы, которые можно редактировать и удалять точно
-    // так же, как темы, созданные вручную в админке.
-    const themesSnap = await getDocs(themesCol)
-    if (themesSnap.empty) {
-      await Promise.all(
-        SEED_THEMES.map((theme) => {
-          const { id, ...rest } = theme
-          return setDoc(doc(db, 'themes', id), {
-            ...rest,
-            bgImage: rest.bgImage || null,
-            bgVideo: rest.bgVideo || null,
-            particleImages: rest.particleImages || [],
-          })
-        })
-      )
-    }
+      const siteSnap = await getDoc(siteDoc)
+      const data = siteSnap.exists() ? siteSnap.data() : {}
 
-    const catalogSnap = await getDoc(catalogDoc)
-    if (!catalogSnap.exists()) {
-      await setDoc(catalogDoc, DEFAULT_CATALOG)
-    }
-
-    const siteSnap = await getDoc(siteDoc)
-    if (!siteSnap.exists()) {
-      await setDoc(siteDoc, { themeId: 'default', ...DEFAULT_SITE_SETTINGS })
-    } else {
-      // На случай, если документ settings/site уже существовал до
-      // появления настроек сайта (название, цвет, лого, телефон) —
-      // дозаполняем только отсутствующие поля, не трогая остальное.
-      const data = siteSnap.data()
+      // Дозаполняем только отсутствующие поля настроек, ничего не трогая.
       const missing = {}
       for (const key of Object.keys(DEFAULT_SITE_SETTINGS)) {
         if (data[key] === undefined) missing[key] = DEFAULT_SITE_SETTINGS[key]
       }
+      if (!siteSnap.exists()) missing.themeId = 'default'
+
+      if (!data.seeded) {
+        const menuSnap = await getDocs(menuCol)
+        if (menuSnap.empty) {
+          await Promise.all(
+            DEFAULT_MENU.map((item) => {
+              const { id, ...rest } = item
+              return setDoc(doc(db, 'menu', id), rest)
+            })
+          )
+        }
+        const themesSnap = await getDocs(themesCol)
+        if (themesSnap.empty) {
+          await Promise.all(
+            SEED_THEMES.map((theme) => {
+              const { id, ...rest } = theme
+              return setDoc(doc(db, 'themes', id), {
+                ...rest,
+                bgImage: rest.bgImage || null,
+                bgVideo: rest.bgVideo || null,
+                particleImages: rest.particleImages || [],
+              })
+            })
+          )
+        }
+        const catalogSnap = await getDoc(catalogDoc)
+        if (!catalogSnap.exists()) {
+          await setDoc(catalogDoc, DEFAULT_CATALOG)
+        }
+        missing.seeded = true
+      }
+
       if (Object.keys(missing).length) {
         await setDoc(siteDoc, missing, { merge: true })
       }
+    } catch (err) {
+      console.warn('[choco-flora] Первичное наполнение базы пропущено:', err)
     }
   }
 
@@ -104,29 +128,31 @@ async function firestoreApi() {
     mode: 'firebase',
 
     async init() {
-      await ensureSeed()
+      // Не ждём: наполнение базы идёт в фоне и никогда не задерживает и
+      // не ломает загрузку сайта.
+      ensureSeed()
     },
 
-    subscribeMenu(callback) {
-      return onSnapshot(menuCol, (snap) => {
+    subscribeMenu(callback, onError) {
+      return listen(menuCol, (snap) => {
         callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      })
+      }, onError)
     },
 
-    subscribeSiteTheme(callback) {
-      return onSnapshot(siteDoc, (snap) => {
+    subscribeSiteTheme(callback, onError) {
+      return listen(siteDoc, (snap) => {
         callback(snap.exists() ? snap.data().themeId || 'default' : 'default')
-      })
+      }, onError)
     },
 
-    subscribeThemes(callback) {
-      return onSnapshot(themesCol, (snap) => {
+    subscribeThemes(callback, onError) {
+      return listen(themesCol, (snap) => {
         callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      })
+      }, onError)
     },
 
-    subscribeSiteSettings(callback) {
-      return onSnapshot(siteDoc, (snap) => {
+    subscribeSiteSettings(callback, onError) {
+      return listen(siteDoc, (snap) => {
         const data = snap.exists() ? snap.data() : {}
         callback({
           siteTitle: data.siteTitle || DEFAULT_SITE_SETTINGS.siteTitle,
@@ -137,23 +163,60 @@ async function firestoreApi() {
           fontFamily: data.fontFamily || DEFAULT_SITE_SETTINGS.fontFamily,
           logoUrl: data.logoUrl || DEFAULT_SITE_SETTINGS.logoUrl,
           phone: data.phone || DEFAULT_SITE_SETTINGS.phone,
+          siteUrl: data.siteUrl || DEFAULT_SITE_SETTINGS.siteUrl,
         })
-      })
+      }, onError)
     },
 
-    subscribeCatalog(callback) {
-      return onSnapshot(catalogDoc, (snap) => {
+    subscribeCatalog(callback, onError) {
+      return listen(catalogDoc, (snap) => {
         const data = snap.exists() ? snap.data() : {}
         callback({
           groups: Array.isArray(data.groups) ? data.groups : DEFAULT_CATALOG.groups,
           filters: Array.isArray(data.filters) ? data.filters : DEFAULT_CATALOG.filters,
         })
-      })
+      }, onError)
     },
 
     // patch: { groups?, filters? } — записываем целиком нужный массив.
     async updateCatalog(patch) {
       await setDoc(catalogDoc, patch, { merge: true })
+    },
+
+
+    // ----- Резервная копия: выгрузка и восстановление -----
+    async exportAll() {
+      const [menuSnap, themesSnap, siteSnap, catalogSnap] = await Promise.all([
+        getDocs(menuCol), getDocs(themesCol), getDoc(siteDoc), getDoc(catalogDoc),
+      ])
+      const settings = siteSnap.exists() ? { ...siteSnap.data() } : {}
+      delete settings.updatedAt
+      return {
+        app: 'choco-flora-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        menu: menuSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        themes: themesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        catalog: catalogSnap.exists() ? catalogSnap.data() : DEFAULT_CATALOG,
+        settings,
+      }
+    },
+
+    // Только добавляет/обновляет по ID — ничего не удаляет.
+    async importAll(data) {
+      for (const item of data.menu || []) {
+        const { id, ...rest } = item
+        if (id) await setDoc(doc(db, 'menu', id), rest)
+      }
+      for (const theme of data.themes || []) {
+        const { id, ...rest } = theme
+        if (id) await setDoc(doc(db, 'themes', id), rest)
+      }
+      if (data.catalog) await setDoc(catalogDoc, data.catalog, { merge: true })
+      if (data.settings) {
+        const { updatedAt: _u, ...rest } = data.settings
+        await setDoc(siteDoc, { ...rest, seeded: true }, { merge: true })
+      }
     },
 
     async setSiteTheme(themeId) {
@@ -280,6 +343,41 @@ function localApi() {
       listeners.catalog.forEach((cb) => cb(next))
     },
 
+
+    async exportAll() {
+      return {
+        app: 'choco-flora-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        menu: loadMenu(DEFAULT_MENU),
+        themes: seedLocalThemesIfNeeded(),
+        catalog: loadCatalog(DEFAULT_CATALOG),
+        settings: { ...loadSiteSettings(DEFAULT_SITE_SETTINGS), themeId: loadThemeId('default') },
+      }
+    },
+
+    async importAll(data) {
+      if (Array.isArray(data.menu) && data.menu.length) {
+        const byId = new Map(loadMenu(DEFAULT_MENU).map((i) => [i.id, i]))
+        data.menu.forEach((i) => byId.set(i.id, i))
+        const next = [...byId.values()]
+        saveMenu(next)
+        listeners.menu.forEach((cb) => cb(next))
+      }
+      if (Array.isArray(data.themes) && data.themes.length) {
+        const byId = new Map(seedLocalThemesIfNeeded().map((i) => [i.id, i]))
+        data.themes.forEach((i) => byId.set(i.id, i))
+        const next = [...byId.values()]
+        saveCustomThemes(next)
+        listeners.themes.forEach((cb) => cb(next))
+      }
+      if (data.catalog) {
+        const next = { ...loadCatalog(DEFAULT_CATALOG), ...data.catalog }
+        saveCatalog(next)
+        listeners.catalog.forEach((cb) => cb(next))
+      }
+    },
+
     async setSiteTheme(themeId) {
       saveThemeId(themeId)
       listeners.theme.forEach((cb) => cb(themeId))
@@ -347,36 +445,26 @@ function localApi() {
 }
 
 // ---------------------------------------------------------------------
-// ВЫБОР РЕЖИМА (с автоматической подстраховкой)
+// ВЫБОР РЕЖИМА
 // ---------------------------------------------------------------------
-// Если в src/firebase.js прописаны ключи, пробуем работать через Firebase.
-// НО: если что-то не так с настройкой (не тот projectId, не применены
-// правила доступа Firestore, нет интернета и т.п.), init() выбросит
-// ошибку — и тогда мы НЕ оставляем приложение в «полуживом» состоянии
-// (когда админка вроде открывается, а сохранить ничего нельзя), а сами
-// переключаемся в локальный режим (localStorage), чтобы сайт и админка
-// гарантированно продолжали работать и всё введённое реально сохранялось.
+// Ключи Firebase прописаны -> ВСЕГДА работаем только через Firebase.
+//
+// Раньше при любой ошибке сайт молча переключался на localStorage
+// браузера. Для посетителя это выглядело как «все опубликованные товары
+// исчезли», хотя в Firestore они лежали целыми, а всё, что админ
+// добавлял в таком режиме, оставалось только в его браузере. Теперь
+// тихого отката нет: если база недоступна, сайт честно показывает
+// ошибку с кнопкой «Повторить» (см. App.jsx / LoadingScreen.jsx), а
+// данные в базе остаются нетронутыми.
 async function resolveApi() {
   if (!isFirebaseConfigured) {
     const api = localApi()
     await api.init()
     return api
   }
-  try {
-    const api = await firestoreApi()
-    await api.init()
-    return api
-  } catch (err) {
-    console.error(
-      '[choco-flora] Firebase недоступен (проверьте ключи в .env и правила доступа Firestore — firestore.rules). ' +
-        'Переключаюсь на локальный режим (localStorage), чтобы сохранение продолжало работать:',
-      err
-    )
-    const fallback = localApi()
-    await fallback.init()
-    fallback.mode = 'local-fallback'
-    return fallback
-  }
+  const api = await firestoreApi()
+  await api.init()
+  return api
 }
 
 let apiPromise = null

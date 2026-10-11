@@ -206,3 +206,27 @@ export function saveCatalog(catalog) {
     throw err
   }
 }
+
+// Небольшой кэш «внешнего вида» последнего визита (название, логотип, цвета
+// темы). Нужен только для экрана загрузки: чтобы он сразу выглядел как
+// настоящий сайт, а не как встроенная тема по умолчанию. Сами товары и темы
+// здесь НЕ хранятся — они всегда берутся из базы.
+const BOOT_KEY = 'choco-flora-boot'
+
+export function loadBootCache() {
+  try {
+    const raw = localStorage.getItem(BOOT_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function saveBootCache(data) {
+  try {
+    localStorage.setItem(BOOT_KEY, JSON.stringify(data))
+  } catch {
+    /* ignore */
+  }
+}
